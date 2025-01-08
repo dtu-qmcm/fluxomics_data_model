@@ -1,0 +1,41 @@
+# This workflow tests whether the documentation builds correctly and runs a
+# lighthouse audit.
+
+name: Test docs
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+
+jobs:
+  docs:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        # Install a specific version of uv.
+        version: "0.5.15"
+   
+    - name: install fluxomics_data_model
+      run: uv sync --dev
+
+    - name: build docs with mkdocs
+      run: mkdocs build
+
+    - name: Audit with Lighthouse
+      uses: treosh/lighthouse-ci-action@v12
+      with:
+        configPath: ".github/workflows/lighthouserc.json"
+        temporaryPublicStorage: true
+        uploadArtifacts: true
+        runs: 3 # Multiple runs to reduce variance
+
