@@ -1,0 +1,25 @@
+[project]
+name = "fluxomics-data-model"
+version = "0.1.0"
+description = "A library specifying a format for fluxomics data"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+authors = [
+  {name = "Teddy Groves", email = "tedgro@dtu.dk"},
+  {name = "Sergi Muyo Abad", email = "smuyo@dtu.dk"},
+  {name = "Te Chen", email = "techen@dtu.dk"},
+]
+license = {text = "MIT"}
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+ignore = ["F722"]
+extend-select = ["E501"]  # line length is checked
+
+[tool.ruff.lint.isort]
+known-first-party = ["fluxomics_data_model"]
+
+
