@@ -24,7 +24,7 @@ jobs:
       with:
         # Install a specific version of uv.
         version: "0.5.15"
-   
+
     - name: install fluxomics_data_model
       run: uv sync --dev
 
@@ -38,4 +38,3 @@ jobs:
         temporaryPublicStorage: true
         uploadArtifacts: true
         runs: 3 # Multiple runs to reduce variance
-

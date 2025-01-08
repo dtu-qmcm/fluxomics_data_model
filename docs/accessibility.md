@@ -30,4 +30,3 @@ We’re always looking to improve the accessibility of this website. If you find
 any problems not listed on this page or think we’re not meeting accessibility
 requirements, contact us by [email](mailto:tedgro@dtu.dk) or raise
 an issue on our [GitHub repository](https://github.com/dtu-qmcm/fluxomics_data_model/issues).
-
