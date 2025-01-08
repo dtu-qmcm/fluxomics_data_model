@@ -16,13 +16,13 @@ We want as many people as possible to be able to use this website. For example, 
 
 ## How accessible this website is
 
-We test the website's accessibility using [Lighthouse](https://developer.chrome.com/docs/lighthouse/overview/). Check out the latest results [here](https://github.com/dtu-qmcm/enzax/actions/workflows/test_docs.yml).
+We test the website's accessibility using [Lighthouse](https://developer.chrome.com/docs/lighthouse/overview/). Check out the latest results [here](https://github.com/dtu-qmcm/fluxomics_data_model/actions/workflows/test_docs.yml).
 
 ## Feedback and contact information
 
 If you need information on this website in a different format like accessible
-PDF, large print, easy read, audio recording or braille, please contact us by
-[email](mailto:tedgro@dtu.dk) or raise an issue on the [enzax GitHub repository](https://github.com/dtu-qmcm/fluxomics_data_model/issues).
+PDF, large print, easy read, audio recording or Braille, please contact us by
+[email](mailto:tedgro@dtu.dk) or raise an issue on the [fluxomics_data_model GitHub repository](https://github.com/dtu-qmcm/fluxomics_data_model/issues).
 
 ## Reporting accessibility problems with this website
 
