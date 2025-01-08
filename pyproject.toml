@@ -12,6 +12,10 @@ authors = [
 ]
 license = {text = "MIT"}
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.ruff]
 line-length = 80
 
@@ -21,5 +25,14 @@ extend-select = ["E501"]  # line length is checked
 
 [tool.ruff.lint.isort]
 known-first-party = ["fluxomics_data_model"]
+
+[dependency-groups]
+dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.5.49",
+    "mkdocstrings>=0.27.0",
+    "mkdocstrings-python>=1.13.0",
+    "pymdown-extensions>=10.14",
+]
 
 

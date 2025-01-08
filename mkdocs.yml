@@ -1,0 +1,46 @@
+site_name: "FLuxomics Data Model"
+site_description: An input format for fluxomics data
+use_directory_urls: False
+theme:
+  name: "material"
+  features:
+    - content.tabs.link
+    - content.code.annotate
+    - content.code.copy
+    - announce.dismiss
+    - navigation.sections
+  # logo: '_static/bibat-light.svg'
+  # favicon: '_static/bibat-light.svg'
+repo_url: https://github.com/dtu-qmcm/fluxomics_data_model
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        paths: [src/fluxomics_data_model]
+        options:
+          show_bases: false
+          docstring_style: sphinx
+          members_order: source
+          group_by_category: false
+          filters: ["!^_"]
+          docstring_options:
+            warn_unknown_params: false
+
+markdown_extensions:
+  - admonition
+  - pymdownx.keys
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: 'index.md'
+  - Getting started: 'getting_started.md'
+  - Contributing: 'contributing.md'
+  - Accessibility: 'accessibility.md'
+  - API:
+    - 'api/reaction_network.md'
+
