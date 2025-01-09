@@ -5,3 +5,6 @@
         - "!check"
       members:
         - ReactionNetwork
+        - Species
+        - Reactant
+        - Reaction

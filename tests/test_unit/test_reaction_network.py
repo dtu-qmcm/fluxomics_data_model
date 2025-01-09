@@ -31,10 +31,16 @@ def test_reactant_creation():
 def test_reaction_creation():
     """Test creation of Reaction objects."""
     substrate = Reactant(
-        id="glc", is_product=False, atom_pattern="ABCDEF", name="glucose"
+        id="g6p",
+        is_product=False,
+        atom_pattern="ABCDEF",
+        name="glucose 6-phosphate",
     )
     product = Reactant(
-        id="pyr", is_product=True, atom_pattern="ABC", name="pyruvate"
+        id="f6p",
+        is_product=True,
+        atom_pattern="ABCDEF",
+        name="fructose 6-phosphate",
     )
     reaction = Reaction(
         id="r1",
