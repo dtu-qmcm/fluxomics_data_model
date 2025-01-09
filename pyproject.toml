@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "A library specifying a format for fluxomics data"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.10.4",
+]
 authors = [
   {name = "Teddy Groves", email = "tedgro@dtu.dk"},
   {name = "Sergi Muyo Abad", email = "smuyo@dtu.dk"},
@@ -33,4 +35,6 @@ dev = [
     "mkdocstrings>=0.27.0",
     "mkdocstrings-python>=1.13.0",
     "pymdown-extensions>=10.14",
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
 ]

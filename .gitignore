@@ -1,3 +1,4 @@
 .python-version
 uv.lock
 site/
+**__pycache__**
