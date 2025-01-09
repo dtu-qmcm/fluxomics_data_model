@@ -1,0 +1,39 @@
+# This workflow checks out the repo, installs the package and runs pre-commit and pytest, then checks test coverage
+
+name: Test docs
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+
+jobs:
+  run_tests:
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+        matrix:
+            os: [ubuntu-latest, windows-latest]
+            python-version: [3.12]
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        # Install a specific version of uv.
+        version: "0.5.15"
+
+    - name: install fluxomics_data_model
+      run: uv sync --dev --all-extras
+
+    - name: pre-commit checks
+      uses: pre-commit/action@v3.0.1
+
+    - name: run pytest
+      run: uv run pytest tests
