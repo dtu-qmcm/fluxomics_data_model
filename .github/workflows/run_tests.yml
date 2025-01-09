@@ -1,6 +1,6 @@
 # This workflow checks out the repo, installs the package and runs pre-commit and pytest, then checks test coverage
 
-name: Test docs
+name: Run tests
 
 on:
   push:
