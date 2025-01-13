@@ -1,0 +1,3 @@
+experiment_id,rxn_id,flux,flux_std_error
+SA27,v1,1.2803,0.01
+SA27,v65,2.0234,0.01
