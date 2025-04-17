@@ -442,7 +442,7 @@ if __name__ == "__main__":
         print(f"Parsing {xml_file}...")
         fluxml_data = parse_fluxml_xml(xml_file)
         print("Parsing successful!")
-
+        __import__("pdb").set_trace()
         # Optionally print some parsed data
         print(
             f"\nModel Name: {fluxml_data.info.name if fluxml_data.info else 'N/A'}"
