@@ -1,5 +1,5 @@
 """
-FluxML metabolite pool definitions.
+FluxML metabolite definitions.
 """
 
 from typing import Optional, List
@@ -8,16 +8,16 @@ import jax.numpy as jnp
 from .common import Annotation, JAXArray
 
 
-class Pool(BaseModel):
+class Metabolite(BaseModel):
     """
-    FluxML metabolite pool definition.
+    FluxML metabolite definition.
 
-    Corresponds to fluxml/reactionnetwork/metabolitepools/pool
+    Corresponds to fluxml/reactionnetwork/metabolites/metabolite
     """
 
-    id: str = Field(description="Pool identifier")
+    id: str = Field(description="Metabolite identifier")
     atoms: int = Field(default=0, ge=0, le=1024, description="Number of atoms")
-    size: float = Field(default=1.0, description="Pool size")
+    size: float = Field(default=1.0, description="Metabolite size")
     cfg: str = Field(default="0", description="Atom configuration")
     annotations: List[Annotation] = Field(
         default_factory=list, description="Annotations"
@@ -51,9 +51,9 @@ class Pool(BaseModel):
             return jnp.ones(self.atoms, dtype=jnp.float32)
         return self.jax_atoms.to_jax_array()
 
-    def with_jax_atoms(self, atoms: jnp.ndarray) -> "Pool":
-        """Create new pool with JAX atom array."""
-        return Pool(
+    def with_jax_atoms(self, atoms: jnp.ndarray) -> "Metabolite":
+        """Create new metabolite with JAX atom array."""
+        return Metabolite(
             id=self.id,
             atoms=self.atoms,
             size=self.size,
@@ -63,52 +63,52 @@ class Pool(BaseModel):
         )
 
 
-class MetabolitePools(BaseModel):
+class Metabolites(BaseModel):
     """
-    FluxML metabolite pools collection.
+    FluxML metabolites collection.
 
-    Corresponds to fluxml/reactionnetwork/metabolitepools
+    Corresponds to fluxml/reactionnetwork/metabolites
     """
 
-    pools: List[Pool] = Field(
-        min_length=1, description="List of metabolite pools"
+    metabolites: List[Metabolite] = Field(
+        min_length=1, description="List of metabolites"
     )
 
     class Config:
         frozen = True
         extra = "forbid"
 
-    @field_validator("pools")
+    @field_validator("metabolites")
     @classmethod
-    def validate_unique_ids(cls, v: List[Pool]) -> List[Pool]:
-        """Validate pool IDs are unique."""
-        ids = [pool.id for pool in v]
+    def validate_unique_ids(cls, v: List[Metabolite]) -> List[Metabolite]:
+        """Validate metabolite IDs are unique."""
+        ids = [metabolite.id for metabolite in v]
         if len(set(ids)) != len(ids):
-            raise ValueError("Pool IDs must be unique")
+            raise ValueError("Metabolite IDs must be unique")
         return v
 
     @property
-    def pool_dict(self) -> dict[str, Pool]:
-        """Get pools as dictionary keyed by ID."""
-        return {pool.id: pool for pool in self.pools}
+    def metabolite_dict(self) -> dict[str, Metabolite]:
+        """Get metabolites as dictionary keyed by ID."""
+        return {metabolite.id: metabolite for metabolite in self.metabolites}
 
     @property
-    def pool_ids(self) -> frozenset[str]:
-        """Get all pool IDs."""
-        return frozenset(pool.id for pool in self.pools)
+    def metabolite_ids(self) -> frozenset[str]:
+        """Get all metabolite IDs."""
+        return frozenset(metabolite.id for metabolite in self.metabolites)
 
-    def get_pool(self, pool_id: str) -> Optional[Pool]:
-        """Get pool by ID."""
-        return self.pool_dict.get(pool_id)
+    def get_metabolite(self, metabolite_id: str) -> Optional[Metabolite]:
+        """Get metabolite by ID."""
+        return self.metabolite_dict.get(metabolite_id)
 
     def to_stoichiometric_matrix(self, reaction_ids: List[str]) -> jnp.ndarray:
         """
         Create stoichiometric matrix for JAX computations.
 
         Returns:
-            JAX array of shape (n_pools, n_reactions)
+            JAX array of shape (n_metabolites, n_reactions)
         """
         # This would be implemented with actual stoichiometry data
-        n_pools = len(self.pools)
+        n_metabolites = len(self.metabolites)
         n_reactions = len(reaction_ids)
-        return jnp.zeros((n_pools, n_reactions), dtype=jnp.float32)
+        return jnp.zeros((n_metabolites, n_reactions), dtype=jnp.float32)

@@ -2,3 +2,13 @@
 uv.lock
 site/
 **__pycache__**
+.qodo
+.aider*
+.DS_Store
+.ipynb_checkpoints
+.claude
+.ruff_cache
+.vscode/
+.venv/
+*.egg-info/
+*.egg

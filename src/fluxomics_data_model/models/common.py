@@ -11,8 +11,8 @@ class Annotation(BaseModel):
     """
     FluxML annotation element for additional metadata.
 
-    Corresponds to fluxml/reactionnetwork/metabolitepools/pool/annotation
-    and fluxml/reactionnetwork/reaction/annotation
+    Corresponds to fluxml/reactionnetwork/metabolites/metabolite/annotation
+    and fluxml/reactionnetwork/reaction/annotation.
     """
 
     name: str = Field(description="Annotation name")
@@ -51,7 +51,7 @@ class ErrorModel(BaseModel):
     """
     FluxML error model for measurement uncertainties.
 
-    Corresponds to fluxml/configuration/measurement/model/*/errormodel
+    Corresponds to fluxml/experiments/measurement/model/*/errormodel
     """
 
     expression: TextualOrMath = Field(description="Error model expression")

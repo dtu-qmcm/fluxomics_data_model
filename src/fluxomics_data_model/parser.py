@@ -10,14 +10,14 @@ from .models import (
     FluxML,
     Info,
     ReactionNetwork,
-    Pool,
-    MetabolitePools,
+    Metabolite,
+    Metabolites,
     Reaction,
     Reduct,
     RProduct,
     Variant,
-    Configuration,
-    Input,
+    Experiments,
+    Tracers,
     Label,
     Measurement,
     MeasurementData,
@@ -28,13 +28,13 @@ from .models import (
     FluxMeasurement,
     NetFlux,
     XchFlux,
-    PoolSizeMeasurement,
-    PoolSize,
+    MetaboliteSizeMeasurement,
+    MetaboliteSize,
     Simulation,
     Constraints,
     NetConstraints,
     XchConstraints,
-    PsizeConstraints,
+    MetaboliteSizeConstraints,
     Annotation,
     TextualOrMath,
     ErrorModel,
@@ -101,16 +101,16 @@ class FluxMLParser:
             root.find(f"{ns_prefix}constraints")
         )
 
-        # Parse configurations
-        configurations = []
-        for config_elem in root.findall(f"{ns_prefix}configuration"):
-            configurations.append(self._parse_configuration(config_elem))
+        # Parse experiments
+        experiments = []
+        for exp_elem in root.findall(f"{ns_prefix}configuration"):
+            experiments.append(self._parse_experiments(exp_elem))
 
         return FluxML(
             info=info,
             reactionnetwork=reactionnetwork,
             constraints=constraints,
-            configurations=configurations,
+            experiments=experiments,
         )
 
     def _parse_info(self, info_elem: Optional[ET.Element]) -> Optional[Info]:
@@ -152,16 +152,16 @@ class FluxMLParser:
 
         ns_prefix = self._get_namespace_prefix(rn_elem)
 
-        # Parse metabolitepools
+        # Parse metabolites
         pools_elem = rn_elem.find(f"{ns_prefix}metabolitepools")
         if pools_elem is None:
             raise ValueError("metabolitepools element is required")
 
-        pools = []
+        metabolites = []
         for pool_elem in pools_elem.findall(f"{ns_prefix}pool"):
-            pools.append(self._parse_pool(pool_elem))
+            metabolites.append(self._parse_metabolite(pool_elem))
 
-        metabolitepools = MetabolitePools(pools=pools)
+        metabolites_collection = Metabolites(metabolites=metabolites)
 
         # Parse reactions
         reactions = []
@@ -169,14 +169,14 @@ class FluxMLParser:
             reactions.append(self._parse_reaction(reaction_elem))
 
         return ReactionNetwork(
-            metabolitepools=metabolitepools, reactions=reactions
+            metabolites=metabolites_collection, reactions=reactions
         )
 
-    def _parse_pool(self, pool_elem: ET.Element) -> Pool:
-        """Parse pool element."""
-        pool_id = pool_elem.get("id")
-        if not pool_id:
-            raise ValueError("Pool must have an id attribute")
+    def _parse_metabolite(self, pool_elem: ET.Element) -> Metabolite:
+        """Parse metabolite (pool) element."""
+        metabolite_id = pool_elem.get("id")
+        if not metabolite_id:
+            raise ValueError("Metabolite (pool) must have an id attribute")
 
         atoms = int(pool_elem.get("atoms", "0"))
         size = float(pool_elem.get("size", "1.0"))
@@ -188,8 +188,12 @@ class FluxMLParser:
         for ann_elem in pool_elem.findall(f"{ns_prefix}annotation"):
             annotations.append(self._parse_annotation(ann_elem))
 
-        return Pool(
-            id=pool_id, atoms=atoms, size=size, cfg=cfg, annotations=annotations
+        return Metabolite(
+            id=metabolite_id,
+            atoms=atoms,
+            size=size,
+            cfg=cfg,
+            annotations=annotations,
         )
 
     def _parse_reaction(self, reaction_elem: ET.Element) -> Reaction:
@@ -307,12 +311,12 @@ class FluxMLParser:
         # Parse psize constraints
         psize_elem = constraints_elem.find(f"{ns_prefix}psize")
         psize = (
-            self._parse_psize_constraints(psize_elem)
+            self._parse_metabolitesize_constraints(psize_elem)
             if psize_elem is not None
             else None
         )
 
-        return Constraints(net=net, xch=xch, psize=psize)
+        return Constraints(net=net, xch=xch, metabolitesize=psize)
 
     def _parse_net_constraints(self, net_elem: ET.Element) -> NetConstraints:
         """Parse net constraints element."""
@@ -324,12 +328,12 @@ class FluxMLParser:
         expression = self._parse_textual_or_math(xch_elem)
         return XchConstraints(expression=expression)
 
-    def _parse_psize_constraints(
+    def _parse_metabolitesize_constraints(
         self, psize_elem: ET.Element
-    ) -> PsizeConstraints:
+    ) -> MetaboliteSizeConstraints:
         """Parse psize constraints element."""
         expression = self._parse_textual_or_math(psize_elem)
-        return PsizeConstraints(expression=expression)
+        return MetaboliteSizeConstraints(expression=expression)
 
     def _parse_textual_or_math(self, elem: ET.Element) -> TextualOrMath:
         """Parse textual or MathML content."""
@@ -350,11 +354,13 @@ class FluxMLParser:
 
         return TextualOrMath(textual=textual, mathml=mathml)
 
-    def _parse_configuration(self, config_elem: ET.Element) -> Configuration:
-        """Parse configuration element."""
+    def _parse_experiments(self, config_elem: ET.Element) -> Experiments:
+        """Parse configuration element into an Experiments object."""
         name = config_elem.get("name")
         if not name:
-            raise ValueError("Configuration must have a name attribute")
+            raise ValueError(
+                "Experiment (configuration) must have a name attribute"
+            )
 
         stationary = config_elem.get("stationary", "true").lower() == "true"
         time_str = config_elem.get("time")
@@ -366,10 +372,10 @@ class FluxMLParser:
         comment_elem = config_elem.find(f"{ns_prefix}comment")
         comment = comment_elem.text if comment_elem is not None else None
 
-        # Parse inputs
-        inputs = []
+        # Parse tracers (inputs)
+        tracers = []
         for input_elem in config_elem.findall(f"{ns_prefix}input"):
-            inputs.append(self._parse_input(input_elem))
+            tracers.append(self._parse_tracer(input_elem))
 
         # Parse constraints (optional)
         constraints_elem = config_elem.find(f"{ns_prefix}constraints")
@@ -395,22 +401,22 @@ class FluxMLParser:
             else None
         )
 
-        return Configuration(
+        return Experiments(
             name=name,
             stationary=stationary,
             time=time,
             comment=comment,
-            inputs=inputs,
+            tracers=tracers,
             constraints=constraints,
             measurement=measurement,
             simulation=simulation,
         )
 
-    def _parse_input(self, input_elem: ET.Element) -> Input:
-        """Parse input element."""
-        pool = input_elem.get("pool")
-        if not pool:
-            raise ValueError("Input must have a pool attribute")
+    def _parse_tracer(self, input_elem: ET.Element) -> Tracers:
+        """Parse input element into a Tracers object."""
+        metabolite = input_elem.get("pool")
+        if not metabolite:
+            raise ValueError("Tracer (input) must have a pool attribute")
 
         input_id = input_elem.get("id")
         input_type = input_elem.get("type", "isotopomer")
@@ -422,9 +428,9 @@ class FluxMLParser:
         for label_elem in input_elem.findall(f"{ns_prefix}label"):
             labels.append(self._parse_label(label_elem))
 
-        return Input(
+        return Tracers(
             id=input_id,
-            pool=pool,
+            metabolite=metabolite,
             type=input_type,
             profile=profile,
             labels=labels,
@@ -484,16 +490,16 @@ class FluxMLParser:
 
         # Parse poolsizemeasurement (optional)
         poolsize_elem = model_elem.find(f"{ns_prefix}poolsizemeasurement")
-        poolsize_measurement = None
+        metabolitesize_measurement = None
         if poolsize_elem is not None:
-            poolsize_measurement = self._parse_poolsize_measurement(
+            metabolitesize_measurement = self._parse_metabolitesize_measurement(
                 poolsize_elem
             )
 
         return MeasurementModel(
             labeling_measurement=labeling_measurement,
             flux_measurement=flux_measurement,
-            poolsize_measurement=poolsize_measurement,
+            metabolitesize_measurement=metabolitesize_measurement,
         )
 
     def _parse_labeling_measurement(
@@ -598,23 +604,29 @@ class FluxMLParser:
             id=xchflux_id, errormodel=errormodel, expression=expression
         )
 
-    def _parse_poolsize_measurement(
+    def _parse_metabolitesize_measurement(
         self, poolsize_elem: ET.Element
-    ) -> PoolSizeMeasurement:
+    ) -> MetaboliteSizeMeasurement:
         """Parse poolsizemeasurement element."""
         ns_prefix = self._get_namespace_prefix(poolsize_elem)
 
-        pool_sizes = []
+        metabolite_sizes = []
         for poolsize_item_elem in poolsize_elem.findall(f"{ns_prefix}poolsize"):
-            pool_sizes.append(self._parse_poolsize(poolsize_item_elem))
+            metabolite_sizes.append(
+                self._parse_metabolitesize(poolsize_item_elem)
+            )
 
-        return PoolSizeMeasurement(pool_sizes=pool_sizes)
+        return MetaboliteSizeMeasurement(metabolite_sizes=metabolite_sizes)
 
-    def _parse_poolsize(self, poolsize_elem: ET.Element) -> PoolSize:
+    def _parse_metabolitesize(
+        self, poolsize_elem: ET.Element
+    ) -> MetaboliteSize:
         """Parse poolsize element."""
-        poolsize_id = poolsize_elem.get("id")
-        if not poolsize_id:
-            raise ValueError("PoolSize must have an id attribute")
+        metabolitesize_id = poolsize_elem.get("id")
+        if not metabolitesize_id:
+            raise ValueError(
+                "MetaboliteSize (poolsize) must have an id attribute"
+            )
 
         ns_prefix = self._get_namespace_prefix(poolsize_elem)
 
@@ -629,8 +641,8 @@ class FluxMLParser:
         # Parse expression
         expression = self._parse_textual_or_math(poolsize_elem)
 
-        return PoolSize(
-            id=poolsize_id, errormodel=errormodel, expression=expression
+        return MetaboliteSize(
+            id=metabolitesize_id, errormodel=errormodel, expression=expression
         )
 
     def _parse_measurement_data(self, data_elem: ET.Element) -> MeasurementData:

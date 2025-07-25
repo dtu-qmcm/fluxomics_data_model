@@ -3,10 +3,15 @@ repos:
   rev: v5.0.0
   hooks:
   -   id: check-yaml
+      exclude: ^data/
   -   id: check-json
+      exclude: ^data/
   -   id: check-toml
+      exclude: ^data/
   -   id: end-of-file-fixer
+      exclude: ^data/
   -   id: trailing-whitespace
+      exclude: ^data/
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
@@ -14,5 +19,7 @@ repos:
   hooks:
     # Run the linter.
     - id: ruff
+      exclude: ^data/
     # Run the formatter.
     - id: ruff-format
+      exclude: ^data/

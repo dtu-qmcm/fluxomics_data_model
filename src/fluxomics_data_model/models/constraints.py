@@ -39,15 +39,15 @@ class XchConstraints(BaseModel):
         extra = "forbid"
 
 
-class PsizeConstraints(BaseModel):
+class MetaboliteSizeConstraints(BaseModel):
     """
-    FluxML pool size constraints.
+    FluxML metabolite size constraints.
 
-    Corresponds to fluxml/constraints/psize
+    Corresponds to fluxml/constraints/metabolitesize
     """
 
     expression: TextualOrMath = Field(
-        description="Pool size constraint expression"
+        description="Metabolite size constraint expression"
     )
 
     class Config:
@@ -68,8 +68,8 @@ class Constraints(BaseModel):
     xch: Optional[XchConstraints] = Field(
         default=None, description="Exchange flux constraints"
     )
-    psize: Optional[PsizeConstraints] = Field(
-        default=None, description="Pool size constraints"
+    metabolitesize: Optional[MetaboliteSizeConstraints] = Field(
+        default=None, description="Metabolite size constraints"
     )
 
     class Config:

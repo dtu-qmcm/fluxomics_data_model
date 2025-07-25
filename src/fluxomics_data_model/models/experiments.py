@@ -1,5 +1,5 @@
 """
-FluxML configuration definitions.
+FluxML experimental setup definitions.
 """
 
 from typing import Optional, List
@@ -15,7 +15,7 @@ class Label(BaseModel):
     """
     FluxML isotope label specification.
 
-    Corresponds to fluxml/configuration/input/label
+    Corresponds to fluxml/experiments/tracers/label
     """
 
     cfg: str = Field(
@@ -42,18 +42,18 @@ class Label(BaseModel):
         return v
 
 
-class Input(BaseModel):
+class Tracers(BaseModel):
     """
-    FluxML input specification for tracer experiments.
+    FluxML tracer specification for tracer experiments.
 
-    Corresponds to fluxml/configuration/input
+    Corresponds to fluxml/experiments/tracers
     """
 
-    id: Optional[str] = Field(default=None, description="Input identifier")
-    pool: str = Field(description="Pool identifier")
-    type: str = Field(default="isotopomer", description="Input type")
+    id: Optional[str] = Field(default=None, description="Tracer identifier")
+    metabolite: str = Field(description="Metabolite identifier")
+    type: str = Field(default="isotopomer", description="Tracer type")
     profile: Optional[str] = Field(default=None, description="Time profile")
-    labels: List[Label] = Field(
+    labels: List[Label] = Field(  # noqa: B008
         default_factory=list, description="Isotope labels"
     )
 
@@ -80,11 +80,11 @@ class Input(BaseModel):
             return jnp.array([1.0])
         return self.composition_array.to_jax_array()
 
-    def with_composition(self, composition: jnp.ndarray) -> "Input":
-        """Create new input with specified composition."""
-        return Input(
+    def with_composition(self, composition: jnp.ndarray) -> "Tracers":
+        """Create new tracer with specified composition."""
+        return Tracers(
             id=self.id,
-            pool=self.pool,
+            metabolite=self.metabolite,
             type=self.type,
             profile=self.profile,
             labels=self.labels,
@@ -94,11 +94,11 @@ class Input(BaseModel):
 
     def with_time_profile(
         self, times: jnp.ndarray, values: jnp.ndarray
-    ) -> "Input":
-        """Create new input with time profile."""
-        return Input(
+    ) -> "Tracers":
+        """Create new tracer with time profile."""
+        return Tracers(
             id=self.id,
-            pool=self.pool,
+            metabolite=self.metabolite,
             type=self.type,
             profile=self.profile,
             labels=self.labels,
@@ -107,30 +107,30 @@ class Input(BaseModel):
         )
 
 
-class Configuration(BaseModel):
+class Experiments(BaseModel):
     """
-    FluxML experimental configuration.
+    FluxML experimental setup.
 
-    Corresponds to fluxml/configuration
+    Corresponds to fluxml/experiments
     """
 
-    name: str = Field(description="Configuration name")
+    name: str = Field(description="Experiment name")
     stationary: bool = Field(default=True, description="Stationary assumption")
     time: Optional[float] = Field(default=None, description="Time point")
     comment: Optional[str] = Field(
-        default=None, description="Configuration comment"
+        default=None, description="Experiment comment"
     )
-    inputs: List[Input] = Field(
-        default_factory=list, description="Input specifications"
+    tracers: List[Tracers] = Field(
+        default_factory=list, description="Tracer specifications"
     )
     constraints: Optional[Constraints] = Field(
-        default=None, description="Configuration constraints"
+        default=None, description="Experiment-specific constraints"
     )
     measurement: Optional[Measurement] = Field(
         default=None, description="Measurement data"
     )
     simulation: Optional[Simulation] = Field(
-        default=None, description="Simulation settings"
+        default=None, description="Experiment-specific simulation settings"
     )
 
     class Config:
@@ -138,29 +138,33 @@ class Configuration(BaseModel):
         extra = "forbid"
 
     @property
-    def input_pools(self) -> frozenset[str]:
-        """Get all input pool IDs."""
-        return frozenset(input_spec.pool for input_spec in self.inputs)
+    def traced_metabolites(self) -> frozenset[str]:
+        """Get all traced metabolite IDs."""
+        return frozenset(tracer_spec.metabolite for tracer_spec in self.tracers)
 
-    def get_input_for_pool(self, pool_id: str) -> Optional[Input]:
-        """Get input specification for a pool."""
-        for input_spec in self.inputs:
-            if input_spec.pool == pool_id:
-                return input_spec
+    def get_tracer_for_metabolite(
+        self, metabolite_id: str
+    ) -> Optional[Tracers]:
+        """Get tracer specification for a metabolite."""
+        for tracer_spec in self.tracers:
+            if tracer_spec.metabolite == metabolite_id:
+                return tracer_spec
         return None
 
-    def get_tracer_composition_matrix(self, pool_ids: List[str]) -> jnp.ndarray:
+    def get_tracer_composition_matrix(
+        self, metabolite_ids: List[str]
+    ) -> jnp.ndarray:
         """
         Get tracer composition matrix for JAX computations.
 
         Returns:
-            JAX array of shape (n_pools, n_isotopomers)
+            JAX array of shape (n_metabolites, n_isotopomers)
         """
         compositions = []
-        for pool_id in pool_ids:
-            input_spec = self.get_input_for_pool(pool_id)
-            if input_spec:
-                compositions.append(input_spec.composition_vector)
+        for metabolite_id in metabolite_ids:
+            tracer_spec = self.get_tracer_for_metabolite(metabolite_id)
+            if tracer_spec:
+                compositions.append(tracer_spec.composition_vector)
             else:
                 compositions.append(jnp.array([1.0]))  # Unlabeled
 

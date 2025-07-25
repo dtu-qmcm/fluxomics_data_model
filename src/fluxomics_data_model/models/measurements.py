@@ -12,7 +12,7 @@ class Group(BaseModel):
     """
     FluxML measurement group for mass spectrometry data.
 
-    Corresponds to fluxml/configuration/measurement/model/
+    Corresponds to fluxml/experiments/measurement/model/
     labelingmeasurement/group
     """
 
@@ -54,7 +54,7 @@ class NetFlux(BaseModel):
     """
     FluxML net flux measurement.
 
-    Corresponds to fluxml/configuration/measurement/model/
+    Corresponds to fluxml/experiments/measurement/model/
     fluxmeasurement/netflux
     """
 
@@ -73,7 +73,7 @@ class XchFlux(BaseModel):
     """
     FluxML exchange flux measurement.
 
-    Corresponds to fluxml/configuration/measurement/model/
+    Corresponds to fluxml/experiments/measurement/model/
     fluxmeasurement/xchflux
     """
 
@@ -88,19 +88,19 @@ class XchFlux(BaseModel):
         extra = "forbid"
 
 
-class PoolSize(BaseModel):
+class MetaboliteSize(BaseModel):
     """
-    FluxML pool size measurement.
+    FluxML metabolite size measurement.
 
-    Corresponds to fluxml/configuration/measurement/model/
-    poolsizemeasurement/poolsize
+    Corresponds to fluxml/experiments/measurement/model/
+    metabolitesizemeasurement/metabolitesize
     """
 
-    id: str = Field(description="Pool size identifier")
+    id: str = Field(description="Metabolite size identifier")
     errormodel: Optional[ErrorModel] = Field(
         default=None, description="Error model"
     )
-    expression: TextualOrMath = Field(description="Pool size expression")
+    expression: TextualOrMath = Field(description="Metabolite size expression")
 
     class Config:
         frozen = True
@@ -111,7 +111,7 @@ class LabelingMeasurement(BaseModel):
     """
     FluxML labeling measurement collection.
 
-    Corresponds to fluxml/configuration/measurement/model/labelingmeasurement
+    Corresponds to fluxml/experiments/measurement/model/labelingmeasurement
     """
 
     groups: List[Group] = Field(
@@ -136,7 +136,7 @@ class FluxMeasurement(BaseModel):
     """
     FluxML flux measurement collection.
 
-    Corresponds to fluxml/configuration/measurement/model/fluxmeasurement
+    Corresponds to fluxml/experiments/measurement/model/fluxmeasurement
     """
 
     net_fluxes: List[NetFlux] = Field(
@@ -151,15 +151,16 @@ class FluxMeasurement(BaseModel):
         extra = "forbid"
 
 
-class PoolSizeMeasurement(BaseModel):
+class MetaboliteSizeMeasurement(BaseModel):
     """
-    FluxML pool size measurement collection.
+    FluxML metabolite size measurement collection.
 
-    Corresponds to fluxml/configuration/measurement/model/poolsizemeasurement
+    Corresponds to fluxml/experiments/measurement/model/
+    metabolitesizemeasurement
     """
 
-    pool_sizes: List[PoolSize] = Field(
-        default_factory=list, description="Pool size measurements"
+    metabolite_sizes: List[MetaboliteSize] = Field(
+        default_factory=list, description="Metabolite size measurements"
     )
 
     class Config:
@@ -171,7 +172,7 @@ class MeasurementModel(BaseModel):
     """
     FluxML measurement model.
 
-    Corresponds to fluxml/configuration/measurement/model
+    Corresponds to fluxml/experiments/measurement/model
     """
 
     labeling_measurement: Optional[LabelingMeasurement] = Field(
@@ -180,8 +181,8 @@ class MeasurementModel(BaseModel):
     flux_measurement: Optional[FluxMeasurement] = Field(
         default=None, description="Flux measurements"
     )
-    poolsize_measurement: Optional[PoolSizeMeasurement] = Field(
-        default=None, description="Pool size measurements"
+    metabolitesize_measurement: Optional[MetaboliteSizeMeasurement] = Field(
+        default=None, description="Metabolite size measurements"
     )
 
     class Config:
@@ -193,7 +194,7 @@ class Datum(BaseModel):
     """
     FluxML measurement datum.
 
-    Corresponds to fluxml/configuration/measurement/data/datum
+    Corresponds to fluxml/experiments/measurement/data/datum
     """
 
     id: str = Field(description="Datum identifier")
@@ -222,7 +223,7 @@ class MeasurementData(BaseModel):
     """
     FluxML measurement data collection.
 
-    Corresponds to fluxml/configuration/measurement/data
+    Corresponds to fluxml/experiments/measurement/data
     """
 
     data: List[Datum] = Field(
@@ -296,7 +297,7 @@ class Measurement(BaseModel):
     """
     FluxML measurement specification.
 
-    Corresponds to fluxml/configuration/measurement
+    Corresponds to fluxml/experiments/measurement
     """
 
     model: MeasurementModel = Field(description="Measurement model")

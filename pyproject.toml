@@ -5,8 +5,13 @@ description = "A library specifying a format for fluxomics data"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "jax>=0.4.23",
+    "jaxlib>=0.4.23",
+    "matplotlib>=3.10.1",
+    "pandas>=2.2.3",
     "pydantic>=2.10.4",
     "sbmlmath>=0.4.0",
+    "seaborn>=0.13.2",
     "sympy>=1.13.3",
 ]
 authors = [
@@ -24,6 +29,7 @@ build-backend = "hatchling.build"
 plugins = ['pydantic.mypy']
 
 [tool.ruff]
+extend-exclude = ["data"]
 line-length = 80
 
 [tool.ruff.lint]
@@ -35,6 +41,8 @@ known-first-party = ["fluxomics_data_model"]
 
 [dependency-groups]
 dev = [
+    "jupyter>=1.0.0",
+    "ipykernel>=6.29.5",
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5.49",
     "mkdocstrings>=0.27.0",
@@ -42,4 +50,6 @@ dev = [
     "pymdown-extensions>=10.14",
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.3.0",
 ]

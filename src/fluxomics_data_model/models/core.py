@@ -7,10 +7,10 @@ from datetime import datetime
 import re
 from pydantic import BaseModel, Field, field_validator
 import jax.numpy as jnp
-from .pools import MetabolitePools
+from .metabolites import Metabolites
 from .reactions import Reaction
 from .constraints import Constraints
-from .configuration import Configuration
+from .experiments import Experiments
 
 
 class Info(BaseModel):
@@ -55,14 +55,12 @@ class Info(BaseModel):
 
 class ReactionNetwork(BaseModel):
     """
-    FluxML reaction network containing metabolite pools and reactions.
+    FluxML reaction network containing metabolites and reactions.
 
     Corresponds to fluxml/reactionnetwork
     """
 
-    metabolitepools: MetabolitePools = Field(
-        description="Metabolite pool definitions"
-    )
+    metabolites: Metabolites = Field(description="Metabolite definitions")
     reactions: List[Reaction] = Field(
         default_factory=list, description="Reaction definitions"
     )
@@ -76,22 +74,22 @@ class ReactionNetwork(BaseModel):
         self._validate_cross_references()
 
     def _validate_cross_references(self):
-        """Validate cross-references between pools and reactions."""
-        pool_ids = self.metabolitepools.pool_ids
+        """Validate cross-references between metabolites and reactions."""
+        metabolite_ids = self.metabolites.metabolite_ids
 
-        # Check all reduct and rproduct IDs exist in pools
+        # Check all reduct and rproduct IDs exist in metabolites
         for reaction in self.reactions:
             for reduct in reaction.reducts:
-                if reduct.id not in pool_ids:
+                if reduct.id not in metabolite_ids:
                     raise ValueError(
                         f"Reduct {reduct.id} in reaction {reaction.id} "
-                        f"references unknown pool"
+                        f"references unknown metabolite"
                     )
             for rproduct in reaction.rproducts:
-                if rproduct.id not in pool_ids:
+                if rproduct.id not in metabolite_ids:
                     raise ValueError(
                         f"RProduct {rproduct.id} in reaction {reaction.id} "
-                        f"references unknown pool"
+                        f"references unknown metabolite"
                     )
 
     @field_validator("reactions")
@@ -118,14 +116,14 @@ class ReactionNetwork(BaseModel):
         Get stoichiometric matrix for JAX computations.
 
         Returns:
-            JAX array of shape (n_pools, n_reactions)
+            JAX array of shape (n_metabolites, n_reactions)
         """
-        pool_ids = list(self.metabolitepools.pool_ids)
+        metabolite_ids = list(self.metabolites.metabolite_ids)
         # reaction_ids = list(self.reaction_ids)  # Unused variable
 
         matrix = []
         for reaction in self.reactions:
-            column = reaction.get_stoichiometric_vector(pool_ids)
+            column = reaction.get_stoichiometric_vector(metabolite_ids)
             matrix.append(column)
 
         return jnp.stack(matrix, axis=1)
@@ -148,8 +146,8 @@ class FluxML(BaseModel):
     constraints: Optional[Constraints] = Field(
         default=None, description="Model constraints"
     )
-    configurations: List[Configuration] = Field(
-        default_factory=list, description="Experimental configurations"
+    experiments: List[Experiments] = Field(
+        default_factory=list, description="Experimental setups"
     )
 
     class Config:
@@ -158,50 +156,53 @@ class FluxML(BaseModel):
 
     def __init__(self, **data):
         super().__init__(**data)
-        self._validate_configuration_references()
+        self._validate_experiments_references()
 
-    def _validate_configuration_references(self):
-        """Validate configuration references to pools and reactions."""
-        pool_ids = self.pool_ids
+    def _validate_experiments_references(self):
+        """Validate experiment references to metabolites and reactions."""
+        metabolite_ids = self.metabolite_ids
         reaction_ids = self.reaction_ids
 
-        # Check configuration names are unique
-        if len(self.configurations) > 1:
-            config_names = [c.name for c in self.configurations]
-            if len(set(config_names)) != len(config_names):
-                raise ValueError("Configuration names must be unique")
+        # Check experiment names are unique
+        if len(self.experiments) > 1:
+            experiments_names = [e.name for e in self.experiments]
+            if len(set(experiments_names)) != len(experiments_names):
+                raise ValueError("Experiment names must be unique")
 
-        # Check pool and reaction references
-        for config in self.configurations:
-            # Check input pool references
-            for input_spec in config.inputs:
-                if input_spec.pool not in pool_ids:
+        # Check metabolite and reaction references
+        for experiment in self.experiments:
+            # Check tracer metabolite references
+            for tracer_spec in experiment.tracers:
+                if tracer_spec.metabolite not in metabolite_ids:
                     raise ValueError(
-                        f"Input pool {input_spec.pool} in configuration "
-                        f"{config.name} references unknown pool"
+                        f"Tracer metabolite {tracer_spec.metabolite} in "
+                        f"experiment {experiment.name} references unknown "
+                        f"metabolite"
                     )
 
             # Check simulation variable references
-            if config.simulation and config.simulation.variables:
-                for flux_var in config.simulation.variables.flux_values:
+            if experiment.simulation and experiment.simulation.variables:
+                for flux_var in experiment.simulation.variables.flux_values:
                     if flux_var.flux not in reaction_ids:
                         raise ValueError(
                             f"Flux variable {flux_var.flux} in configuration "
-                            f"{config.name} references unknown reaction"
+                            f"{experiment.name} references unknown reaction"
                         )
 
-                for pool_var in config.simulation.variables.poolsize_values:
-                    if pool_var.pool not in pool_ids:
+                for (
+                    m_var
+                ) in experiment.simulation.variables.metabolitesize_values:
+                    if m_var.metabolite not in metabolite_ids:
                         raise ValueError(
-                            f"Pool size variable {pool_var.pool} in "
-                            f"configuration {config.name} references "
-                            f"unknown pool"
+                            f"Metabolite size variable {m_var.metabolite} in "
+                            f"experiment {experiment.name} references "
+                            f"unknown metabolite"
                         )
 
     @property
-    def pool_ids(self) -> frozenset[str]:
-        """Get all pool IDs in the model."""
-        return self.reactionnetwork.metabolitepools.pool_ids
+    def metabolite_ids(self) -> frozenset[str]:
+        """Get all metabolite IDs in the model."""
+        return self.reactionnetwork.metabolites.metabolite_ids
 
     @property
     def reaction_ids(self) -> frozenset[str]:
@@ -209,15 +210,15 @@ class FluxML(BaseModel):
         return self.reactionnetwork.reaction_ids
 
     @property
-    def configuration_names(self) -> frozenset[str]:
-        """Get all configuration names."""
-        return frozenset(config.name for config in self.configurations)
+    def experiments_names(self) -> frozenset[str]:
+        """Get all experiment names."""
+        return frozenset(exp.name for exp in self.experiments)
 
-    def get_configuration(self, name: str) -> Optional[Configuration]:
-        """Get configuration by name."""
-        for config in self.configurations:
-            if config.name == name:
-                return config
+    def get_experiments(self, name: str) -> Optional[Experiments]:
+        """Get experiments by name."""
+        for exp in self.experiments:
+            if exp.name == name:
+                return exp
         return None
 
     def to_jax_representation(self) -> Dict[str, Any]:
@@ -227,65 +228,67 @@ class FluxML(BaseModel):
         Returns:
             Dictionary with JAX arrays for numerical computations
         """
-        pool_ids = list(self.pool_ids)
+        metabolite_ids = list(self.metabolite_ids)
         reaction_ids = list(self.reaction_ids)
 
         # Get stoichiometric matrix
         S = self.reactionnetwork.get_stoichiometric_matrix()
 
-        # Get bounds matrices from first configuration (if available)
+        # Get bounds matrices from first experiment (if available)
         flux_bounds = None
-        poolsize_bounds = None
+        metabolitesize_bounds = None
 
-        if self.configurations:
-            config = self.configurations[0]
-            if config.simulation:
-                flux_bounds, poolsize_bounds = (
-                    config.simulation.get_optimization_bounds(
-                        reaction_ids, pool_ids
+        if self.experiments:
+            experiment = self.experiments[0]
+            if experiment.simulation:
+                flux_bounds, metabolitesize_bounds = (
+                    experiment.simulation.get_optimization_bounds(
+                        reaction_ids, metabolite_ids
                     )
                 )
 
         if flux_bounds is None:
             flux_bounds = jnp.array([[-jnp.inf, jnp.inf]] * len(reaction_ids))
-        if poolsize_bounds is None:
-            poolsize_bounds = jnp.array([[0.0, jnp.inf]] * len(pool_ids))
+        if metabolitesize_bounds is None:
+            metabolitesize_bounds = jnp.array(
+                [[0.0, jnp.inf]] * len(metabolite_ids)
+            )
 
         return {
             "stoichiometric_matrix": S,
             "flux_bounds": flux_bounds,
-            "poolsize_bounds": poolsize_bounds,
-            "pool_ids": pool_ids,
+            "metabolitesize_bounds": metabolitesize_bounds,
+            "metabolite_ids": metabolite_ids,
             "reaction_ids": reaction_ids,
-            "n_pools": len(pool_ids),
+            "n_metabolites": len(metabolite_ids),
             "n_reactions": len(reaction_ids),
-            "n_configurations": len(self.configurations),
+            "n_experiments": len(self.experiments),
         }
 
     def get_tracer_experiment_data(
-        self, config_name: str
+        self, experiments_name: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Get tracer experiment data for a specific configuration.
+        Get tracer experiment data for a specific experiment.
 
         Returns:
             Dictionary with JAX arrays for tracer experiment analysis
         """
-        config = self.get_configuration(config_name)
-        if not config:
+        experiment = self.get_experiments(experiments_name)
+        if not experiment:
             return None
 
-        pool_ids = list(self.pool_ids)
+        metabolite_ids = list(self.metabolite_ids)
 
         # Get tracer composition matrix
-        tracer_matrix = config.get_tracer_composition_matrix(pool_ids)
+        tracer_matrix = experiment.get_tracer_composition_matrix(metabolite_ids)
 
         # Get measurement data
         measurement_data = None
-        if config.measurement:
-            values = config.measurement.data.values
-            errors = config.measurement.data.errors
-            times = config.measurement.data.times
+        if experiment.measurement:
+            values = experiment.measurement.data.values
+            errors = experiment.measurement.data.errors
+            times = experiment.measurement.data.times
 
             measurement_data = {
                 "values": values,
@@ -296,6 +299,53 @@ class FluxML(BaseModel):
         return {
             "tracer_composition": tracer_matrix,
             "measurement_data": measurement_data,
-            "stationary": config.stationary,
-            "time_point": config.time,
+            "stationary": experiment.stationary,
+            "time_point": experiment.time,
         }
+
+    def __repr__(self) -> str:
+        """
+        Return a summary of the FluxML model including Info table and counts.
+        """
+        lines = ["FluxML Model Summary", "=" * 20, ""]
+
+        # Info table
+        if self.info:
+            lines.append("Model Information:")
+            lines.append("-" * 18)
+            info_items = [
+                ("Name", self.info.name),
+                ("Version", self.info.version),
+                (
+                    "Date",
+                    self.info.date.strftime("%Y-%m-%d %H:%M:%S")
+                    if self.info.date
+                    else None,
+                ),
+                ("Comment", self.info.comment),
+                ("Modeler", self.info.modeler),
+                ("Strain", self.info.strain),
+            ]
+
+            max_key_len = max(len(key) for key, _ in info_items)
+            for key, value in info_items:
+                if value is not None:
+                    lines.append(f"{key:<{max_key_len}} : {value}")
+        else:
+            lines.append("Model Information: Not available")
+
+        lines.append("")
+
+        # Counts
+        lines.append("Model Components:")
+        lines.append("-" * 17)
+        lines.append(
+            f"Reactions        : {len(self.reactionnetwork.reactions)}"
+        )  # noqa: E501
+        lines.append(
+            f"Metabolites      : "
+            f"{len(self.reactionnetwork.metabolites.metabolites)}"
+        )
+        lines.append(f"Experiments      : {len(self.experiments)}")
+
+        return "\n".join(lines)

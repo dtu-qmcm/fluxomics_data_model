@@ -12,7 +12,7 @@ class FluxValue(BaseModel):
     """
     FluxML flux value specification for simulation.
 
-    Corresponds to fluxml/configuration/simulation/variables/fluxvalue
+    Corresponds to fluxml/experiments/simulation/variables/fluxvalue
     """
 
     flux: str = Field(description="Flux identifier")
@@ -42,15 +42,17 @@ class FluxValue(BaseModel):
         return jnp.array([lo, hi])
 
 
-class PoolSizeValue(BaseModel):
+class MetaboliteSizeValue(BaseModel):
     """
-    FluxML pool size value specification for simulation.
+    FluxML metabolite size value specification for simulation.
 
-    Corresponds to fluxml/configuration/simulation/variables/poolsizevalue
+    Corresponds to fluxml/experiments/simulation/variables/metabolitesizevalue
     """
 
-    pool: str = Field(description="Pool identifier")
-    value: Optional[float] = Field(default=None, description="Pool size value")
+    metabolite: str = Field(description="Metabolite identifier")
+    value: Optional[float] = Field(
+        default=None, description="Metabolite size value"
+    )
     lo: Optional[float] = Field(default=None, description="Lower bound")
     hi: Optional[float] = Field(default=None, description="Upper bound")
     inc: Optional[float] = Field(default=None, description="Increment")
@@ -64,7 +66,7 @@ class PoolSizeValue(BaseModel):
 
     @property
     def bounds(self) -> tuple[Optional[float], Optional[float]]:
-        """Get pool size bounds."""
+        """Get metabolite size bounds."""
         return (self.lo, self.hi)
 
     @property
@@ -79,14 +81,14 @@ class Variables(BaseModel):
     """
     FluxML simulation variables.
 
-    Corresponds to fluxml/configuration/simulation/variables
+    Corresponds to fluxml/experiments/simulation/variables
     """
 
     flux_values: List[FluxValue] = Field(
         default_factory=list, description="Flux variables"
     )
-    poolsize_values: List[PoolSizeValue] = Field(
-        default_factory=list, description="Pool size variables"
+    metabolitesize_values: List[MetaboliteSizeValue] = Field(
+        default_factory=list, description="Metabolite size variables"
     )
 
     class Config:
@@ -102,15 +104,17 @@ class Variables(BaseModel):
             raise ValueError("Flux variable (flux, type) pairs must be unique")
         return v
 
-    @field_validator("poolsize_values")
+    @field_validator("metabolitesize_values")
     @classmethod
-    def validate_unique_pool_ids(
-        cls, v: List[PoolSizeValue]
-    ) -> List[PoolSizeValue]:
-        """Validate pool IDs are unique."""
-        ids = [pv.pool for pv in v]
+    def validate_unique_metabolite_ids(
+        cls, v: List[MetaboliteSizeValue]
+    ) -> List[MetaboliteSizeValue]:
+        """Validate metabolite IDs are unique."""
+        ids = [pv.metabolite for pv in v]
         if len(set(ids)) != len(ids):
-            raise ValueError("Pool size variable pool IDs must be unique")
+            raise ValueError(
+                "Metabolite size variable metabolite IDs must be unique"
+            )
         return v
 
     def get_flux_bounds_matrix(self, flux_ids: List[str]) -> jnp.ndarray:
@@ -138,22 +142,26 @@ class Variables(BaseModel):
 
         return jnp.stack(bounds)
 
-    def get_poolsize_bounds_matrix(self, pool_ids: List[str]) -> jnp.ndarray:
+    def get_metabolitesize_bounds_matrix(
+        self, metabolite_ids: List[str]
+    ) -> jnp.ndarray:
         """
-        Get pool size bounds matrix for JAX computations.
+        Get metabolite size bounds matrix for JAX computations.
 
         Returns:
-            JAX array of shape (n_pools, 2) with [lower, upper] bounds
+            JAX array of shape (n_metabolites, 2) with [lower, upper] bounds
         """
-        pool_dict = {pv.pool: pv for pv in self.poolsize_values}
+        metabolite_dict = {
+            pv.metabolite: pv for pv in self.metabolitesize_values
+        }
 
         bounds = []
-        for pool_id in pool_ids:
-            pool_var = pool_dict.get(pool_id)
-            if pool_var:
-                bounds.append(pool_var.bounds_array)
+        for metabolite_id in metabolite_ids:
+            metabolite_var = metabolite_dict.get(metabolite_id)
+            if metabolite_var:
+                bounds.append(metabolite_var.bounds_array)
             else:
-                # Default bounds for pool sizes
+                # Default bounds for metabolite sizes
                 bounds.append(jnp.array([0.0, jnp.inf]))
 
         return jnp.stack(bounds)
@@ -163,7 +171,7 @@ class Simulation(BaseModel):
     """
     FluxML simulation specification.
 
-    Corresponds to fluxml/configuration/simulation
+    Corresponds to fluxml/experiments/simulation
     """
 
     type: str = Field(default="auto", description="Simulation type")
@@ -180,22 +188,24 @@ class Simulation(BaseModel):
         extra = "forbid"
 
     def get_optimization_bounds(
-        self, flux_ids: List[str], pool_ids: List[str]
+        self, flux_ids: List[str], metabolite_ids: List[str]
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
         Get optimization bounds for JAX optimization.
 
         Returns:
-            Tuple of (flux_bounds, poolsize_bounds) as JAX arrays
+            Tuple of (flux_bounds, metabolitesize_bounds) as JAX arrays
         """
         if self.variables is None:
             # Default bounds
             flux_bounds = jnp.array([[-jnp.inf, jnp.inf]] * len(flux_ids))
-            poolsize_bounds = jnp.array([[0.0, jnp.inf]] * len(pool_ids))
+            metabolitesize_bounds = jnp.array(
+                [[0.0, jnp.inf]] * len(metabolite_ids)
+            )
         else:
             flux_bounds = self.variables.get_flux_bounds_matrix(flux_ids)
-            poolsize_bounds = self.variables.get_poolsize_bounds_matrix(
-                pool_ids
+            metabolitesize_bounds = (
+                self.variables.get_metabolitesize_bounds_matrix(metabolite_ids)
             )
 
-        return flux_bounds, poolsize_bounds
+        return flux_bounds, metabolitesize_bounds

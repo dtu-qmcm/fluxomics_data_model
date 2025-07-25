@@ -30,7 +30,7 @@ class Reduct(BaseModel):
     Corresponds to fluxml/reactionnetwork/reaction/reduct
     """
 
-    id: str = Field(description="Pool ID reference")
+    id: str = Field(description="Metabolite ID reference")
     cfg: Optional[str] = Field(default=None, description="Atom configuration")
     variants: List[Variant] = Field(
         default_factory=list, description="Alternative mappings"
@@ -48,7 +48,7 @@ class RProduct(BaseModel):
     Corresponds to fluxml/reactionnetwork/reaction/rproduct
     """
 
-    id: str = Field(description="Pool ID reference")
+    id: str = Field(description="Metabolite ID reference")
     cfg: Optional[str] = Field(default=None, description="Atom configuration")
     variants: List[Variant] = Field(
         default_factory=list, description="Alternative mappings"
@@ -92,17 +92,17 @@ class Reaction(BaseModel):
 
     @property
     def reactant_ids(self) -> frozenset[str]:
-        """Get all reactant pool IDs."""
+        """Get all reactant metabolite IDs."""
         return frozenset(reduct.id for reduct in self.reducts)
 
     @property
     def product_ids(self) -> frozenset[str]:
-        """Get all product pool IDs."""
+        """Get all product metabolite IDs."""
         return frozenset(rproduct.id for rproduct in self.rproducts)
 
     @property
-    def participating_pools(self) -> frozenset[str]:
-        """Get all participating pool IDs."""
+    def participating_metabolites(self) -> frozenset[str]:
+        """Get all participating metabolite IDs."""
         return self.reactant_ids | self.product_ids
 
     @property
@@ -140,12 +140,14 @@ class Reaction(BaseModel):
             stoichiometry_dict=stoichiometry,
         )
 
-    def get_stoichiometric_vector(self, pool_ids: List[str]) -> jnp.ndarray:
+    def get_stoichiometric_vector(
+        self, metabolite_ids: List[str]
+    ) -> jnp.ndarray:
         """
         Get stoichiometric vector for this reaction.
 
         Args:
-            pool_ids: Ordered list of pool IDs
+            metabolite_ids: Ordered list of metabolite IDs
 
         Returns:
             JAX array with stoichiometric coefficients
@@ -153,10 +155,10 @@ class Reaction(BaseModel):
         if self.stoichiometry_dict is None:
             # Default stoichiometry: -1 for reactants, +1 for products
             coefficients = []
-            for pool_id in pool_ids:
-                if pool_id in self.reactant_ids:
+            for metabolite_id in metabolite_ids:
+                if metabolite_id in self.reactant_ids:
                     coefficients.append(-1.0)
-                elif pool_id in self.product_ids:
+                elif metabolite_id in self.product_ids:
                     coefficients.append(1.0)
                 else:
                     coefficients.append(0.0)
@@ -164,8 +166,8 @@ class Reaction(BaseModel):
         else:
             return jnp.array(
                 [
-                    self.stoichiometry_dict.get(pool_id, 0.0)
-                    for pool_id in pool_ids
+                    self.stoichiometry_dict.get(metabolite_id, 0.0)
+                    for metabolite_id in metabolite_ids
                 ]
             )
 

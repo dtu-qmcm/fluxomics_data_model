@@ -6,7 +6,7 @@ designed for JAX compatibility.
 """
 
 from .core import FluxML, Info, ReactionNetwork
-from .pools import Pool, MetabolitePools
+from .metabolites import Metabolite, Metabolites
 from .reactions import Reaction, Reduct, RProduct, Variant
 from .measurements import (
     Measurement,
@@ -16,27 +16,27 @@ from .measurements import (
     FluxMeasurement,
     NetFlux,
     XchFlux,
-    PoolSizeMeasurement,
-    PoolSize,
+    MetaboliteSizeMeasurement,
+    MetaboliteSize,
     Datum,
     MeasurementModel,
 )
-from .simulation import Simulation, Variables, FluxValue, PoolSizeValue
+from .simulation import Simulation, Variables, FluxValue, MetaboliteSizeValue
 from .constraints import (
     Constraints,
     NetConstraints,
     XchConstraints,
-    PsizeConstraints,
+    MetaboliteSizeConstraints,
 )
-from .configuration import Configuration, Input, Label
+from .experiments import Experiments, Tracers, Label
 from .common import Annotation, ErrorModel, TextualOrMath
 
 __all__ = [
     "FluxML",
     "Info",
     "ReactionNetwork",
-    "Pool",
-    "MetabolitePools",
+    "Metabolite",
+    "Metabolites",
     "Reaction",
     "Reduct",
     "RProduct",
@@ -48,20 +48,20 @@ __all__ = [
     "FluxMeasurement",
     "NetFlux",
     "XchFlux",
-    "PoolSizeMeasurement",
-    "PoolSize",
+    "MetaboliteSizeMeasurement",
+    "MetaboliteSize",
     "Datum",
     "MeasurementModel",
     "Simulation",
     "Variables",
     "FluxValue",
-    "PoolSizeValue",
+    "MetaboliteSizeValue",
     "Constraints",
     "NetConstraints",
     "XchConstraints",
-    "PsizeConstraints",
-    "Configuration",
-    "Input",
+    "MetaboliteSizeConstraints",
+    "Experiments",
+    "Tracers",
     "Label",
     "Annotation",
     "ErrorModel",
