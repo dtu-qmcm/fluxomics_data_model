@@ -7,13 +7,14 @@ from datetime import datetime
 import re
 from pydantic import BaseModel, Field, field_validator
 import jax.numpy as jnp
-from .metabolites import Metabolites
-from .reactions import Reaction
-from .constraints import Constraints
-from .experiments import Experiments
+from ..model.metabolite import Metabolite
+from .common import DictList
+from ..model.reaction import Reaction
+from ..model.constraint import Constraints
+from ..experiment.experiment import Experiments
 
 
-class Info(BaseModel):
+class Metadata(BaseModel):
     """
     FluxML info section containing metadata.
 
@@ -53,16 +54,23 @@ class Info(BaseModel):
         return v
 
 
-class ReactionNetwork(BaseModel):
+class Model(BaseModel):
     """
-    FluxML reaction network containing metabolites and reactions.
+    FluxML model containing metabolites and reactions.
 
     Corresponds to fluxml/reactionnetwork
     """
 
-    metabolites: Metabolites = Field(description="Metabolite definitions")
-    reactions: List[Reaction] = Field(
-        default_factory=list, description="Reaction definitions"
+    metabolites: DictList[Metabolite] = Field(
+        default_factory=lambda: DictList[Metabolite](),
+        description="Metabolite definitions",
+    )
+    reactions: DictList[Reaction] = Field(
+        default_factory=lambda: DictList[Reaction](),
+        description="Reaction definitions",
+    )
+    compartments: List[str] = Field(
+        default_factory=list, description="List of compartments in the model"
     )
 
     class Config:
@@ -75,41 +83,32 @@ class ReactionNetwork(BaseModel):
 
     def _validate_cross_references(self):
         """Validate cross-references between metabolites and reactions."""
-        metabolite_ids = self.metabolites.metabolite_ids
+        metabolite_ids = self.metabolite_ids
 
-        # Check all reduct and rproduct IDs exist in metabolites
+        # Check all reactant and product IDs exist in metabolites
         for reaction in self.reactions:
-            for reduct in reaction.reducts:
-                if reduct.id not in metabolite_ids:
+            for reactant_id in reaction.reactants:
+                if reactant_id not in metabolite_ids:
                     raise ValueError(
-                        f"Reduct {reduct.id} in reaction {reaction.id} "
+                        f"Reactant {reactant_id} in reaction {reaction.id} "
                         f"references unknown metabolite"
                     )
-            for rproduct in reaction.rproducts:
-                if rproduct.id not in metabolite_ids:
+            for product_id in reaction.products:
+                if product_id not in metabolite_ids:
                     raise ValueError(
-                        f"RProduct {rproduct.id} in reaction {reaction.id} "
+                        f"Product {product_id} in reaction {reaction.id} "
                         f"references unknown metabolite"
                     )
-
-    @field_validator("reactions")
-    @classmethod
-    def validate_unique_reaction_ids(cls, v: List[Reaction]) -> List[Reaction]:
-        """Validate reaction IDs are unique."""
-        ids = [reaction.id for reaction in v]
-        if len(set(ids)) != len(ids):
-            raise ValueError("Reaction IDs must be unique")
-        return v
 
     @property
-    def reaction_dict(self) -> Dict[str, Reaction]:
-        """Get reactions as dictionary keyed by ID."""
-        return {reaction.id: reaction for reaction in self.reactions}
+    def metabolite_ids(self) -> frozenset[str]:
+        """Get all metabolite IDs."""
+        return frozenset(self.metabolites.ids)
 
     @property
     def reaction_ids(self) -> frozenset[str]:
         """Get all reaction IDs."""
-        return frozenset(reaction.id for reaction in self.reactions)
+        return frozenset(self.reactions.ids)
 
     def get_stoichiometric_matrix(self) -> jnp.ndarray:
         """
@@ -118,7 +117,7 @@ class ReactionNetwork(BaseModel):
         Returns:
             JAX array of shape (n_metabolites, n_reactions)
         """
-        metabolite_ids = list(self.metabolites.metabolite_ids)
+        metabolite_ids = list(self.metabolite_ids)
         # reaction_ids = list(self.reaction_ids)  # Unused variable
 
         matrix = []
@@ -129,7 +128,7 @@ class ReactionNetwork(BaseModel):
         return jnp.stack(matrix, axis=1)
 
 
-class FluxML(BaseModel):
+class FluxomicsDataModel(BaseModel):
     """
     Root FluxML object containing complete model specification.
 
@@ -139,10 +138,8 @@ class FluxML(BaseModel):
     Corresponds to fluxml root element
     """
 
-    reactionnetwork: ReactionNetwork = Field(
-        description="Reaction network definition"
-    )
-    info: Optional[Info] = Field(default=None, description="Model metadata")
+    model: Model = Field(description="Model definition")
+    info: Optional[Metadata] = Field(default=None, description="Model metadata")
     constraints: Optional[Constraints] = Field(
         default=None, description="Model constraints"
     )
@@ -202,12 +199,12 @@ class FluxML(BaseModel):
     @property
     def metabolite_ids(self) -> frozenset[str]:
         """Get all metabolite IDs in the model."""
-        return self.reactionnetwork.metabolites.metabolite_ids
+        return self.model.metabolite_ids
 
     @property
     def reaction_ids(self) -> frozenset[str]:
         """Get all reaction IDs in the model."""
-        return self.reactionnetwork.reaction_ids
+        return self.model.reaction_ids
 
     @property
     def experiments_names(self) -> frozenset[str]:
@@ -232,7 +229,7 @@ class FluxML(BaseModel):
         reaction_ids = list(self.reaction_ids)
 
         # Get stoichiometric matrix
-        S = self.reactionnetwork.get_stoichiometric_matrix()
+        S = self.model.get_stoichiometric_matrix()
 
         # Get bounds matrices from first experiment (if available)
         flux_bounds = None
@@ -305,11 +302,11 @@ class FluxML(BaseModel):
 
     def __repr__(self) -> str:
         """
-        Return a summary of the FluxML model including Info table and counts.
+        Return a summary of the data model including Metadata and Stats.
         """
-        lines = ["FluxML Model Summary", "=" * 20, ""]
+        lines = ["Fluxomics Data Model Summary", "=" * 30, ""]
 
-        # Info table
+        # Metadata table
         if self.info:
             lines.append("Model Information:")
             lines.append("-" * 18)
@@ -339,13 +336,8 @@ class FluxML(BaseModel):
         # Counts
         lines.append("Model Components:")
         lines.append("-" * 17)
-        lines.append(
-            f"Reactions        : {len(self.reactionnetwork.reactions)}"
-        )  # noqa: E501
-        lines.append(
-            f"Metabolites      : "
-            f"{len(self.reactionnetwork.metabolites.metabolites)}"
-        )
+        lines.append(f"Reactions        : {len(self.model.reactions)}")  # noqa: E501
+        lines.append(f"Metabolites      : {len(self.model.metabolites)}")
         lines.append(f"Experiments      : {len(self.experiments)}")
 
         return "\n".join(lines)

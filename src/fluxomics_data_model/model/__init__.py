@@ -5,49 +5,55 @@ Contains Pydantic models that correspond to FluxML schema elements,
 designed for JAX compatibility.
 """
 
-from .core import FluxML, Info, ReactionNetwork
-from .metabolites import Metabolite, Metabolites
-from .reactions import Reaction, Reduct, RProduct, Variant
-from .measurements import (
+from ..core.core import FluxomicsDataModel, Metadata, Model
+from .metabolite import Metabolite
+from .reaction import Reaction
+from .atom_mapping import AtomMapping, AtomMap, AtomAddress
+from ..experiment.measurement import (
     Measurement,
     MeasurementData,
     Group,
     LabelingMeasurement,
     FluxMeasurement,
     NetFlux,
-    XchFlux,
+    ExchangeFlux,
     MetaboliteSizeMeasurement,
     MetaboliteSize,
     Datum,
     MeasurementModel,
 )
-from .simulation import Simulation, Variables, FluxValue, MetaboliteSizeValue
-from .constraints import (
+from ..experiment.simulation import (
+    Simulation,
+    Variables,
+    FluxValue,
+    MetaboliteSizeValue,
+)
+from .constraint import (
     Constraints,
     NetConstraints,
-    XchConstraints,
+    ExchangeConstraints,
     MetaboliteSizeConstraints,
 )
-from .experiments import Experiments, Tracers, Label
-from .common import Annotation, ErrorModel, TextualOrMath
+from ..experiment.experiment import Experiments
+from ..experiment.tracer import Tracers, LabelComposition
+from ..core.common import Annotation, ErrorModel, TextualOrMath, DictList
 
 __all__ = [
-    "FluxML",
-    "Info",
-    "ReactionNetwork",
+    "FluxomicsDataModel",
+    "Metadata",
+    "Model",
     "Metabolite",
-    "Metabolites",
     "Reaction",
-    "Reduct",
-    "RProduct",
-    "Variant",
+    "AtomMapping",
+    "AtomMap",
+    "AtomAddress",
     "Measurement",
     "MeasurementData",
     "Group",
     "LabelingMeasurement",
     "FluxMeasurement",
     "NetFlux",
-    "XchFlux",
+    "ExchangeFlux",
     "MetaboliteSizeMeasurement",
     "MetaboliteSize",
     "Datum",
@@ -58,12 +64,13 @@ __all__ = [
     "MetaboliteSizeValue",
     "Constraints",
     "NetConstraints",
-    "XchConstraints",
+    "ExchangeConstraints",
     "MetaboliteSizeConstraints",
     "Experiments",
     "Tracers",
-    "Label",
+    "LabelComposition",
     "Annotation",
     "ErrorModel",
     "TextualOrMath",
+    "DictList",
 ]

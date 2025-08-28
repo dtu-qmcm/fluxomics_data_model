@@ -5,7 +5,7 @@ FluxML simulation definitions.
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 import jax.numpy as jnp
-from .measurements import MeasurementModel
+from .measurement import MeasurementModel
 
 
 class FluxValue(BaseModel):

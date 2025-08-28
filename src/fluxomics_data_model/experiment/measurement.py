@@ -5,7 +5,7 @@ FluxML measurement definitions.
 from typing import Optional, List, Dict, Literal
 from pydantic import BaseModel, Field, field_validator
 import jax.numpy as jnp
-from .common import TextualOrMath, ErrorModel, JAXArray, TimeSeries
+from ..core.common import TextualOrMath, ErrorModel, JAXArray, TimeSeries
 
 
 class Group(BaseModel):
@@ -69,7 +69,7 @@ class NetFlux(BaseModel):
         extra = "forbid"
 
 
-class XchFlux(BaseModel):
+class ExchangeFlux(BaseModel):
     """
     FluxML exchange flux measurement.
 
@@ -142,7 +142,7 @@ class FluxMeasurement(BaseModel):
     net_fluxes: List[NetFlux] = Field(
         default_factory=list, description="Net flux measurements"
     )
-    xch_fluxes: List[XchFlux] = Field(
+    xch_fluxes: List[ExchangeFlux] = Field(
         default_factory=list, description="Exchange flux measurements"
     )
 

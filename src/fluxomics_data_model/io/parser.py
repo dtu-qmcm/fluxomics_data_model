@@ -5,20 +5,21 @@ FluxML XML parser for reading FluxML files.
 import xml.etree.ElementTree as ET
 from typing import Optional
 from datetime import datetime
+import re
 
-from .models import (
-    FluxML,
-    Info,
-    ReactionNetwork,
+from ..model import (
+    FluxomicsDataModel,
+    Metadata,
+    Model,
     Metabolite,
-    Metabolites,
     Reaction,
-    Reduct,
-    RProduct,
-    Variant,
+    AtomMapping,
     Experiments,
+    Variables,
+    FluxValue,
+    MetaboliteSizeValue,
     Tracers,
-    Label,
+    LabelComposition,
     Measurement,
     MeasurementData,
     MeasurementModel,
@@ -27,17 +28,18 @@ from .models import (
     Group,
     FluxMeasurement,
     NetFlux,
-    XchFlux,
+    ExchangeFlux,
     MetaboliteSizeMeasurement,
     MetaboliteSize,
     Simulation,
     Constraints,
     NetConstraints,
-    XchConstraints,
+    ExchangeConstraints,
     MetaboliteSizeConstraints,
     Annotation,
     TextualOrMath,
     ErrorModel,
+    DictList,
 )
 
 
@@ -50,8 +52,8 @@ class FluxMLParser:
             "mml": "http://www.w3.org/1998/Math/MathML",
         }
 
-    def parse_file(self, file_path: str) -> FluxML:
-        """Parse a FluxML file and return a FluxML object."""
+    def parse_file(self, file_path: str) -> FluxomicsDataModel:
+        """Parse a FluxML file and return a FluxomicsDataModel object."""
         try:
             # Try to parse with different encodings
             encodings = ["utf-8", "latin-1", "iso-8859-1", "cp1252"]
@@ -82,7 +84,7 @@ class FluxMLParser:
         except Exception as e:
             raise ValueError(f"Error parsing {file_path}: {e}")
 
-    def _parse_fluxml(self, root: ET.Element) -> FluxML:
+    def _parse_fluxml(self, root: ET.Element) -> FluxomicsDataModel:
         """Parse the root fluxml element."""
         # Handle namespace prefix
         if root.tag.startswith("{"):
@@ -94,9 +96,7 @@ class FluxMLParser:
 
         # Parse components
         info = self._parse_info(root.find(f"{ns_prefix}info"))
-        reactionnetwork = self._parse_reactionnetwork(
-            root.find(f"{ns_prefix}reactionnetwork")
-        )
+        model = self._parse_model(root.find(f"{ns_prefix}reactionnetwork"))
         constraints = self._parse_constraints(
             root.find(f"{ns_prefix}constraints")
         )
@@ -106,14 +106,16 @@ class FluxMLParser:
         for exp_elem in root.findall(f"{ns_prefix}configuration"):
             experiments.append(self._parse_experiments(exp_elem))
 
-        return FluxML(
+        return FluxomicsDataModel(
             info=info,
-            reactionnetwork=reactionnetwork,
+            model=model,
             constraints=constraints,
             experiments=experiments,
         )
 
-    def _parse_info(self, info_elem: Optional[ET.Element]) -> Optional[Info]:
+    def _parse_info(
+        self, info_elem: Optional[ET.Element]
+    ) -> Optional[Metadata]:
         """Parse info element."""
         if info_elem is None:
             return None
@@ -136,7 +138,7 @@ class FluxMLParser:
             except ValueError:
                 pass  # Invalid date format
 
-        return Info(
+        return Metadata(
             name=name,
             version=version,
             date=date,
@@ -145,8 +147,8 @@ class FluxMLParser:
             strain=strain,
         )
 
-    def _parse_reactionnetwork(self, rn_elem: ET.Element) -> ReactionNetwork:
-        """Parse reactionnetwork element."""
+    def _parse_model(self, rn_elem: ET.Element) -> Model:
+        """Parse reactionnetwork element into Model object."""
         if rn_elem is None:
             raise ValueError("reactionnetwork element is required")
 
@@ -157,19 +159,23 @@ class FluxMLParser:
         if pools_elem is None:
             raise ValueError("metabolitepools element is required")
 
-        metabolites = []
+        metabolites = DictList[Metabolite]()
+        compartments = set()
         for pool_elem in pools_elem.findall(f"{ns_prefix}pool"):
-            metabolites.append(self._parse_metabolite(pool_elem))
-
-        metabolites_collection = Metabolites(metabolites=metabolites)
+            metabolite = self._parse_metabolite(pool_elem)
+            metabolites.append(metabolite)
+            if metabolite.compartment:
+                compartments.add(metabolite.compartment)
 
         # Parse reactions
-        reactions = []
+        reactions = DictList[Reaction]()
         for reaction_elem in rn_elem.findall(f"{ns_prefix}reaction"):
             reactions.append(self._parse_reaction(reaction_elem))
 
-        return ReactionNetwork(
-            metabolites=metabolites_collection, reactions=reactions
+        return Model(
+            metabolites=metabolites,
+            reactions=reactions,
+            compartments=list(compartments),
         )
 
     def _parse_metabolite(self, pool_elem: ET.Element) -> Metabolite:
@@ -178,9 +184,15 @@ class FluxMLParser:
         if not metabolite_id:
             raise ValueError("Metabolite (pool) must have an id attribute")
 
-        atoms = int(pool_elem.get("atoms", "0"))
-        size = float(pool_elem.get("size", "1.0"))
-        cfg = pool_elem.get("cfg", "0")
+        # Parse optional attributes - only set if present in XML
+        atoms_str = pool_elem.get("atoms")
+        atoms = int(atoms_str) if atoms_str is not None else None
+
+        weight_str = pool_elem.get("size")
+        weight = float(weight_str) if weight_str is not None else None
+
+        formula = pool_elem.get("cfg")
+        compartment = pool_elem.get("compartment")
 
         # Parse annotations
         annotations = []
@@ -190,9 +202,11 @@ class FluxMLParser:
 
         return Metabolite(
             id=metabolite_id,
+            name=None,  # FluxML doesn't typically have separate name field
             atoms=atoms,
-            size=size,
-            cfg=cfg,
+            weight=weight,
+            formula=formula,
+            compartment=compartment,
             annotations=annotations,
         )
 
@@ -202,7 +216,7 @@ class FluxMLParser:
         if not reaction_id:
             raise ValueError("Reaction must have an id attribute")
 
-        bidirectional = (
+        reversibility = (
             reaction_elem.get("bidirectional", "true").lower() == "true"
         )
 
@@ -213,66 +227,129 @@ class FluxMLParser:
         for ann_elem in reaction_elem.findall(f"{ns_prefix}annotation"):
             annotations.append(self._parse_annotation(ann_elem))
 
-        # Parse reducts
-        reducts = []
+        # Parse reactants
+        reactants = []
+        reactant_cfgs = []
         for reduct_elem in reaction_elem.findall(f"{ns_prefix}reduct"):
-            reducts.append(self._parse_reduct(reduct_elem))
+            reduct_id = reduct_elem.get("id")
+            if not reduct_id:
+                raise ValueError("Reactant must have an id attribute")
+            reactants.append(reduct_id)
+            cfg = reduct_elem.get("cfg")
+            if cfg:
+                reactant_cfgs.append((reduct_id, cfg))
 
-        # Parse rproducts
-        rproducts = []
+        # Parse products and check for variants
+        products = []
+        product_cfgs = []
+        # Store variants for products with multiple mappings
+        product_variants = {}
+
         for rproduct_elem in reaction_elem.findall(f"{ns_prefix}rproduct"):
-            rproducts.append(self._parse_rproduct(rproduct_elem))
+            rproduct_id = rproduct_elem.get("id")
+            if not rproduct_id:
+                raise ValueError("Product must have an id attribute")
+            products.append(rproduct_id)
+
+            # Check for variant sub-elements
+            variant_elems = rproduct_elem.findall(f"{ns_prefix}variant")
+            if variant_elems:
+                # Product has multiple variants
+                variants = []
+                for variant_elem in variant_elems:
+                    cfg = variant_elem.get("cfg")
+                    if cfg:
+                        variants.append(cfg)
+                if variants:
+                    product_variants[rproduct_id] = variants
+                    # Use first variant as default for now
+                    product_cfgs.append((rproduct_id, variants[0]))
+            else:
+                # Single cfg attribute on product
+                cfg = rproduct_elem.get("cfg")
+                if cfg:
+                    product_cfgs.append((rproduct_id, cfg))
+
+        # Build atom mapping if configurations exist
+        atom_mapping = AtomMapping()
+        if product_cfgs:
+            # Check if we have variants
+            if product_variants:
+                # Generate multiple mappings for variants
+                all_maps = []
+
+                # Generate all variant combinations
+                variant_products = [
+                    p for p in products if p in product_variants
+                ]
+                if variant_products:
+                    # For simplicity, handle the most common case:
+                    # one product with variants
+                    # Full combinatorial expansion would be more complex
+                    for variant_product in variant_products:
+                        for variant_cfg in product_variants[variant_product]:
+                            # Create product configs with this variant
+                            variant_product_cfgs = []
+                            for pid, cfg in product_cfgs:
+                                if pid == variant_product:
+                                    variant_product_cfgs.append(
+                                        (pid, variant_cfg)
+                                    )
+                                else:
+                                    variant_product_cfgs.append((pid, cfg))
+
+                            # Parse based on format
+                            sample_cfg = variant_cfg
+                            if re.search(r"[A-Z]#\d+@\d+", sample_cfg):
+                                # C#1@2 format
+                                temp_mapping = AtomMapping.from_fluxml_cfg(
+                                    reactant_cfgs=reactant_cfgs,
+                                    product_cfgs=variant_product_cfgs,
+                                    reactant_order=reactants,
+                                )
+                                all_maps.extend(temp_mapping.maps)
+                            elif re.search(r"[a-zA-Z]", sample_cfg):
+                                # Letter notation
+                                temp_mapping = AtomMapping.from_letter_notation(
+                                    reactant_items=reactant_cfgs,
+                                    product_items=variant_product_cfgs,
+                                )
+                                all_maps.extend(temp_mapping.maps)
+
+                    # Create mapping with all variants and equal weights
+                    if all_maps:
+                        weights = [1.0 / len(all_maps)] * len(all_maps)
+                        atom_mapping = AtomMapping(
+                            maps=all_maps, weights=weights
+                        )
+                else:
+                    atom_mapping = AtomMapping()
+            else:
+                # No variants, single mapping
+                sample_cfg = product_cfgs[0][1]
+                if re.search(r"[A-Z]#\d+@\d+", sample_cfg):
+                    # C#1@2 format
+                    atom_mapping = AtomMapping.from_fluxml_cfg(
+                        reactant_cfgs=reactant_cfgs,
+                        product_cfgs=product_cfgs,
+                        reactant_order=reactants,
+                    )
+                elif re.search(r"[a-zA-Z]", sample_cfg):
+                    # Letter notation (abc format)
+                    atom_mapping = AtomMapping.from_letter_notation(
+                        reactant_items=reactant_cfgs,
+                        product_items=product_cfgs,
+                    )
 
         return Reaction(
             id=reaction_id,
-            bidirectional=bidirectional,
+            name=None,
+            reversibility=reversibility,
             annotations=annotations,
-            reducts=reducts,
-            rproducts=rproducts,
+            reactants=reactants,
+            products=products,
+            atom_mapping=atom_mapping,
         )
-
-    def _parse_reduct(self, reduct_elem: ET.Element) -> Reduct:
-        """Parse reduct element."""
-        reduct_id = reduct_elem.get("id")
-        if not reduct_id:
-            raise ValueError("Reduct must have an id attribute")
-
-        cfg = reduct_elem.get("cfg")
-
-        # Parse variants
-        variants = []
-        ns_prefix = self._get_namespace_prefix(reduct_elem)
-        for variant_elem in reduct_elem.findall(f"{ns_prefix}variant"):
-            variants.append(self._parse_variant(variant_elem))
-
-        return Reduct(id=reduct_id, cfg=cfg, variants=variants)
-
-    def _parse_rproduct(self, rproduct_elem: ET.Element) -> RProduct:
-        """Parse rproduct element."""
-        rproduct_id = rproduct_elem.get("id")
-        if not rproduct_id:
-            raise ValueError("RProduct must have an id attribute")
-
-        cfg = rproduct_elem.get("cfg")
-
-        # Parse variants
-        variants = []
-        ns_prefix = self._get_namespace_prefix(rproduct_elem)
-        for variant_elem in rproduct_elem.findall(f"{ns_prefix}variant"):
-            variants.append(self._parse_variant(variant_elem))
-
-        return RProduct(id=rproduct_id, cfg=cfg, variants=variants)
-
-    def _parse_variant(self, variant_elem: ET.Element) -> Variant:
-        """Parse variant element."""
-        cfg = variant_elem.get("cfg")
-        if not cfg:
-            raise ValueError("Variant must have a cfg attribute")
-
-        ratio_str = variant_elem.get("ratio")
-        ratio = float(ratio_str) if ratio_str else None
-
-        return Variant(cfg=cfg, ratio=ratio)
 
     def _parse_annotation(self, ann_elem: ET.Element) -> Annotation:
         """Parse annotation element."""
@@ -300,8 +377,10 @@ class FluxMLParser:
             else None
         )
 
-        # Parse xch constraints
+        # Parse xch constraints (also check for 'exchange' element)
         xch_elem = constraints_elem.find(f"{ns_prefix}xch")
+        if xch_elem is None:
+            xch_elem = constraints_elem.find(f"{ns_prefix}exchange")
         xch = (
             self._parse_xch_constraints(xch_elem)
             if xch_elem is not None
@@ -323,10 +402,12 @@ class FluxMLParser:
         expression = self._parse_textual_or_math(net_elem)
         return NetConstraints(expression=expression)
 
-    def _parse_xch_constraints(self, xch_elem: ET.Element) -> XchConstraints:
+    def _parse_xch_constraints(
+        self, xch_elem: ET.Element
+    ) -> ExchangeConstraints:
         """Parse xch constraints element."""
         expression = self._parse_textual_or_math(xch_elem)
-        return XchConstraints(expression=expression)
+        return ExchangeConstraints(expression=expression)
 
     def _parse_metabolitesize_constraints(
         self, psize_elem: ET.Element
@@ -436,19 +517,31 @@ class FluxMLParser:
             labels=labels,
         )
 
-    def _parse_label(self, label_elem: ET.Element) -> Label:
+    def _parse_label(self, label_elem: ET.Element) -> LabelComposition:
         """Parse label element."""
         cfg = label_elem.get("cfg")
         if not cfg:
             raise ValueError("Label must have a cfg attribute")
 
-        purity = label_elem.get("purity")
+        # Parse purity as float
+        purity_str = label_elem.get("purity")
+        purity = float(purity_str) if purity_str else None
+
+        # Parse cost as float
         cost_str = label_elem.get("cost")
         cost = float(cost_str) if cost_str else None
 
-        content = label_elem.text
+        # Parse fraction from content
+        fraction_str = label_elem.text
+        fraction = (
+            float(fraction_str.strip())
+            if fraction_str and fraction_str.strip()
+            else None
+        )
 
-        return Label(cfg=cfg, purity=purity, cost=cost, content=content)
+        return LabelComposition(
+            labeled_pattern=cfg, purity=purity, cost=cost, fraction=fraction
+        )
 
     def _parse_measurement(self, measurement_elem: ET.Element) -> Measurement:
         """Parse measurement element according to FluxML schema."""
@@ -509,7 +602,10 @@ class FluxMLParser:
         ns_prefix = self._get_namespace_prefix(labeling_elem)
 
         groups = []
+        # Check for both 'group' and 'MSgroup' elements
         for group_elem in labeling_elem.findall(f"{ns_prefix}group"):
+            groups.append(self._parse_group(group_elem))
+        for group_elem in labeling_elem.findall(f"{ns_prefix}MSgroup"):
             groups.append(self._parse_group(group_elem))
 
         return LabelingMeasurement(groups=groups)
@@ -522,6 +618,7 @@ class FluxMLParser:
 
         times = group_elem.get("times")
         scale = group_elem.get("scale", "auto")
+        spec = group_elem.get("spec")
 
         ns_prefix = self._get_namespace_prefix(group_elem)
 
@@ -534,7 +631,11 @@ class FluxMLParser:
             )
 
         # Parse expression (textual or math)
-        expression = self._parse_textual_or_math(group_elem)
+        # If spec attribute exists, use it as textual expression
+        if spec:
+            expression = TextualOrMath(textual=spec)
+        else:
+            expression = self._parse_textual_or_math(group_elem)
 
         return Group(
             id=group_id,
@@ -581,11 +682,11 @@ class FluxMLParser:
             id=netflux_id, errormodel=errormodel, expression=expression
         )
 
-    def _parse_xchflux(self, xchflux_elem: ET.Element) -> XchFlux:
+    def _parse_xchflux(self, xchflux_elem: ET.Element) -> ExchangeFlux:
         """Parse xchflux element."""
         xchflux_id = xchflux_elem.get("id")
         if not xchflux_id:
-            raise ValueError("XchFlux must have an id attribute")
+            raise ValueError("ExchangeFlux must have an id attribute")
 
         ns_prefix = self._get_namespace_prefix(xchflux_elem)
 
@@ -600,7 +701,7 @@ class FluxMLParser:
         # Parse expression
         expression = self._parse_textual_or_math(xchflux_elem)
 
-        return XchFlux(
+        return ExchangeFlux(
             id=xchflux_id, errormodel=errormodel, expression=expression
         )
 
@@ -698,11 +799,73 @@ class FluxMLParser:
         )
 
     def _parse_simulation(self, simulation_elem: ET.Element) -> Simulation:
-        """Parse simulation element (simplified)."""
+        """Parse simulation element."""
         sim_type = simulation_elem.get("type", "auto")
         method = simulation_elem.get("method", "auto")
 
-        return Simulation(type=sim_type, method=method)
+        ns_prefix = self._get_namespace_prefix(simulation_elem)
+
+        # Parse variables
+        variables_elem = simulation_elem.find(f"{ns_prefix}variables")
+        variables = None
+        if variables_elem is not None:
+            flux_values = []
+            for flux_elem in variables_elem.findall(f"{ns_prefix}fluxvalue"):
+                flux_values.append(self._parse_flux_value(flux_elem))
+
+            metabolite_values = []
+            for met_elem in variables_elem.findall(
+                f"{ns_prefix}metabolitesizevalue"
+            ):
+                metabolite_values.append(
+                    self._parse_metabolite_size_value(met_elem)
+                )
+
+            variables = Variables(
+                flux_values=flux_values, metabolitesize_values=metabolite_values
+            )
+
+        return Simulation(type=sim_type, method=method, variables=variables)
+
+    def _parse_flux_value(self, flux_elem: ET.Element) -> FluxValue:
+        """Parse fluxvalue element."""
+        flux = flux_elem.get("flux")
+        if not flux:
+            raise ValueError("FluxValue must have a flux attribute")
+
+        flux_type = flux_elem.get("type", "net")
+
+        # Get the value from element text
+        value_str = flux_elem.text
+        if value_str:
+            try:
+                value = float(value_str.strip())
+            except ValueError:
+                value = 0.0
+        else:
+            value = 0.0
+
+        return FluxValue(flux=flux, type=flux_type, lo=value)
+
+    def _parse_metabolite_size_value(
+        self, met_elem: ET.Element
+    ) -> MetaboliteSizeValue:
+        """Parse metabolitesizevalue element."""
+        pool = met_elem.get("pool")
+        if not pool:
+            raise ValueError("MetaboliteSizeValue must have a pool attribute")
+
+        # Get the value from element text
+        value_str = met_elem.text
+        if value_str:
+            try:
+                value = float(value_str.strip())
+            except ValueError:
+                value = 0.0
+        else:
+            value = 0.0
+
+        return MetaboliteSizeValue(pool=pool, lo=value)
 
     def _get_namespace_prefix(self, elem: ET.Element) -> str:
         """Get namespace prefix for element."""
@@ -717,7 +880,7 @@ class FluxMLParser:
         return elem.text.strip() if elem.text else None
 
 
-def parse_fluxml_file(file_path: str) -> FluxML:
+def parse_fluxml_file(file_path: str) -> FluxomicsDataModel:
     """Parse a FluxML file and return a FluxML object."""
     parser = FluxMLParser()
     return parser.parse_file(file_path)

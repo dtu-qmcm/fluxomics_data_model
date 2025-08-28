@@ -5,77 +5,34 @@ FluxML reaction definitions.
 from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 import jax.numpy as jnp
-from .common import Annotation, JAXArray
+from ..core.common import Annotation, JAXArray
+from .atom_mapping import AtomMapping
 
 
-class Variant(BaseModel):
-    """
-    FluxML reaction variant for alternative atom mappings.
-
-    Corresponds to fluxml/reactionnetwork/reaction/(reduct|rproduct)/variant
-    """
-
-    cfg: str = Field(description="Atom configuration")
-    ratio: Optional[float] = Field(default=None, description="Variant ratio")
-
-    class Config:
-        frozen = True
-        extra = "forbid"
-
-
-class Reduct(BaseModel):
-    """
-    FluxML reaction reactant (substrate).
-
-    Corresponds to fluxml/reactionnetwork/reaction/reduct
-    """
-
-    id: str = Field(description="Metabolite ID reference")
-    cfg: Optional[str] = Field(default=None, description="Atom configuration")
-    variants: List[Variant] = Field(
-        default_factory=list, description="Alternative mappings"
-    )
-
-    class Config:
-        frozen = True
-        extra = "forbid"
-
-
-class RProduct(BaseModel):
-    """
-    FluxML reaction product.
-
-    Corresponds to fluxml/reactionnetwork/reaction/rproduct
-    """
-
-    id: str = Field(description="Metabolite ID reference")
-    cfg: Optional[str] = Field(default=None, description="Atom configuration")
-    variants: List[Variant] = Field(
-        default_factory=list, description="Alternative mappings"
-    )
-
-    class Config:
-        frozen = True
-        extra = "forbid"
+# AtomMapping is now imported from atom_mapping.py
 
 
 class Reaction(BaseModel):
     """
-    FluxML reaction definition.
-
-    Corresponds to fluxml/reactionnetwork/reaction
+    Fluxomics Data Model reaction definition.
     """
 
     id: str = Field(description="Reaction identifier")
-    bidirectional: bool = Field(
+    name: Optional[str] = Field(default=None, description="Reaction name")
+    reversibility: bool = Field(
         default=True, description="Reaction reversibility"
     )
     annotations: List[Annotation] = Field(
         default_factory=list, description="Annotations"
     )
-    reducts: List[Reduct] = Field(default_factory=list, description="Reactants")
-    rproducts: List[RProduct] = Field(
-        default_factory=list, description="Products"
+    reactants: List[str] = Field(
+        default_factory=list, description="Reactant metabolite IDs"
+    )
+    products: List[str] = Field(
+        default_factory=list, description="Product metabolite IDs"
+    )
+    atom_mapping: Optional[AtomMapping] = Field(
+        default=None, description="Atom mappings for this reaction"
     )
 
     # JAX-compatible numerical representation
@@ -93,15 +50,15 @@ class Reaction(BaseModel):
     @property
     def reactant_ids(self) -> frozenset[str]:
         """Get all reactant metabolite IDs."""
-        return frozenset(reduct.id for reduct in self.reducts)
+        return frozenset(self.reactants)
 
     @property
     def product_ids(self) -> frozenset[str]:
         """Get all product metabolite IDs."""
-        return frozenset(rproduct.id for rproduct in self.rproducts)
+        return frozenset(self.products)
 
     @property
-    def participating_metabolites(self) -> frozenset[str]:
+    def metabolites(self) -> frozenset[str]:
         """Get all participating metabolite IDs."""
         return self.reactant_ids | self.product_ids
 
@@ -109,21 +66,38 @@ class Reaction(BaseModel):
     def flux_bounds(self) -> jnp.ndarray:
         """Get flux bounds as JAX array [lower, upper]."""
         if self.flux_bounds_array is None:
-            if self.bidirectional:
-                return jnp.array([-jnp.inf, jnp.inf])
+            if self.reversibility:
+                return jnp.array([-1000.0, 1000.0])
             else:
-                return jnp.array([0.0, jnp.inf])
+                return jnp.array([0.0, 1000.0])
         return self.flux_bounds_array.to_jax_array()
+
+    @property
+    def equation(self) -> str:
+        """Get reaction equation string."""
+        reactants = " + ".join(self.reactants)
+        products = " + ".join(self.products)
+        arrow = " <=> " if self.reversibility else " => "
+        return f"{reactants}{arrow}{products}"
+
+    def get_atom_mapping_string(self) -> Optional[str]:
+        """
+        Get the complete atom mapping for this reaction as a string.
+        """
+        if not self.atom_mapping:
+            return None
+
+        return self.atom_mapping.to_fluxml_string(self.reactants, self.products)
 
     def with_flux_bounds(self, lower: float, upper: float) -> "Reaction":
         """Create new reaction with specified flux bounds."""
         bounds_array = jnp.array([lower, upper])
         return Reaction(
             id=self.id,
-            bidirectional=self.bidirectional,
+            reversibility=self.reversibility,
             annotations=self.annotations,
-            reducts=self.reducts,
-            rproducts=self.rproducts,
+            reactants=self.reactants,
+            products=self.products,
             flux_bounds_array=JAXArray.from_jax_array(bounds_array),
             stoichiometry_dict=self.stoichiometry_dict,
         )
@@ -132,10 +106,10 @@ class Reaction(BaseModel):
         """Create new reaction with specified stoichiometry."""
         return Reaction(
             id=self.id,
-            bidirectional=self.bidirectional,
+            reversibility=self.reversibility,
             annotations=self.annotations,
-            reducts=self.reducts,
-            rproducts=self.rproducts,
+            reactants=self.reactants,
+            products=self.products,
             flux_bounds_array=self.flux_bounds_array,
             stoichiometry_dict=stoichiometry,
         )
@@ -170,11 +144,3 @@ class Reaction(BaseModel):
                     for metabolite_id in metabolite_ids
                 ]
             )
-
-    @property
-    def equation(self) -> str:
-        """Get reaction equation string."""
-        reactants = " + ".join(reduct.id for reduct in self.reducts)
-        products = " + ".join(rproduct.id for rproduct in self.rproducts)
-        arrow = " <=> " if self.bidirectional else " => "
-        return f"{reactants}{arrow}{products}"

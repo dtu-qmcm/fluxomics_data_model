@@ -4,7 +4,7 @@ FluxML constraint definitions.
 
 from typing import Optional
 from pydantic import BaseModel, Field
-from .common import TextualOrMath
+from ..core.common import TextualOrMath
 
 
 class NetConstraints(BaseModel):
@@ -23,7 +23,7 @@ class NetConstraints(BaseModel):
         extra = "forbid"
 
 
-class XchConstraints(BaseModel):
+class ExchangeConstraints(BaseModel):
     """
     FluxML exchange flux constraints.
 
@@ -65,7 +65,7 @@ class Constraints(BaseModel):
     net: Optional[NetConstraints] = Field(
         default=None, description="Net flux constraints"
     )
-    xch: Optional[XchConstraints] = Field(
+    xch: Optional[ExchangeConstraints] = Field(
         default=None, description="Exchange flux constraints"
     )
     metabolitesize: Optional[MetaboliteSizeConstraints] = Field(
