@@ -159,6 +159,10 @@ class Metabolite(BaseModel):
     annotations: List[Annotation] = Field(
         default_factory=list, description="Annotations"
     )
+    involved_in_variants: bool = Field(
+        default=False,
+        description="Flag indicating if this metabolite participates in variant reactions"
+    )
 
     # JAX-compatible numerical representation
     jax_atoms: Optional[JAXArray] = Field(

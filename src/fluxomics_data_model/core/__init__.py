@@ -2,7 +2,7 @@
 Core data models for FluxML.
 """
 
-from .core import FluxomicsDataModel, Metadata, Model
+from .core import FluxomicsDataModel, Metadata, Model, Experiments
 from .common import (
     Annotation,
     ErrorModel,
@@ -16,6 +16,7 @@ __all__ = [
     "FluxomicsDataModel",
     "Metadata",
     "Model",
+    "Experiments",
     "Annotation",
     "ErrorModel",
     "TextualOrMath",

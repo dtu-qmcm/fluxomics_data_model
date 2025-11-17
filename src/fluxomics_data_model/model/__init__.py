@@ -34,7 +34,7 @@ from .constraint import (
     ExchangeConstraints,
     MetaboliteSizeConstraints,
 )
-from ..experiment.experiment import Experiments
+from ..core.core import Experiments
 from ..experiment.tracer import Tracers, LabelComposition
 from ..core.common import Annotation, ErrorModel, TextualOrMath, DictList
 

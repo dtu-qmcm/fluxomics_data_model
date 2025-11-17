@@ -11,10 +11,10 @@ from ..model import (
     FluxomicsDataModel,
     Metadata,
     Model,
+    Experiments,
     Metabolite,
     Reaction,
     AtomMapping,
-    Experiments,
     Variables,
     FluxValue,
     MetaboliteSizeValue,
@@ -216,6 +216,15 @@ class FluxMLParser:
         if not reaction_id:
             raise ValueError("Reaction must have an id attribute")
 
+        # Detect variant reactions: space-separated IDs like "SCS___1 SCS___2"
+        variant_ids = None
+        reaction_id = reaction_id
+        if " " in reaction_id:
+            # This is a variant reaction
+            variant_ids = reaction_id.split()
+            # Extract base name from first variant (e.g., "SCS___1" -> "SCS")
+            reaction_id = variant_ids[0].split("___")[0]
+
         reversibility = (
             reaction_elem.get("bidirectional", "true").lower() == "true"
         )
@@ -349,6 +358,7 @@ class FluxMLParser:
             reactants=reactants,
             products=products,
             atom_mapping=atom_mapping,
+            variant_ids=variant_ids,
         )
 
     def _parse_annotation(self, ann_elem: ET.Element) -> Annotation:
