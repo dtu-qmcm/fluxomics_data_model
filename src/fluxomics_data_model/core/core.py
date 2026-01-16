@@ -8,12 +8,12 @@ import re
 from pydantic import BaseModel, Field, field_validator
 import jax.numpy as jnp
 from ..model.metabolite import Metabolite
-from .common import DictList
+from .common import DictList, AtomMappingsDict
 from ..model.reaction import Reaction
 from ..model.constraint import Constraints
 from ..experiment.measurement import Measurement
 from ..experiment.tracer import Tracers
-from ..experiment.simulation import Simulation
+from ..output.simulation import Simulation
 
 
 class Metadata(BaseModel):
@@ -71,6 +71,10 @@ class Model(BaseModel):
         default_factory=lambda: DictList[Reaction](),
         description="Reaction definitions",
     )
+    atom_mappings: AtomMappingsDict = Field(
+        default_factory=AtomMappingsDict,
+        description="Atom mappings keyed by reaction ID",
+    )
     compartments: List[str] = Field(
         default_factory=list, description="List of compartments in the model"
     )
@@ -113,64 +117,26 @@ class Model(BaseModel):
         return frozenset(self.reactions.ids)
 
     @property
-    def computational_reaction_ids(self) -> List[str]:
-        """
-        Get all computational flux variable IDs (computational representation).
-
-        This expands variant reactions into their individual flux variables.
-        For example: Reaction("SCS", variant_ids=["SCS___1", "SCS___2"])
-        contributes two IDs: ["SCS___1", "SCS___2"]
-
-        This is the projection from biological to computational space.
-        """
+    def atom_mapping_ids(self) -> List[str]:
+        """All ids for atom mappings including variants."""
         ids = []
         for reaction in self.reactions:
-            ids.extend(reaction.computational_flux_ids)
+            if reaction.atom_mapping_ids is not None:
+                ids.extend(reaction.atom_mapping_ids)
         return ids
 
-    def get_reaction_for_flux_id(self, flux_id: str) -> Optional[Reaction]:
-        """
-        Get the reaction object for a given computational flux ID.
-
-        Args:
-            flux_id: Computational flux variable ID (e.g., "SCS___1")
-
-        Returns:
-            Reaction object, or None if not found
-        """
+    @property
+    def computational_reaction_ids(self) -> frozenset[str]:
+        """Get all computational reaction IDs (includes variants)."""
+        ids = []
         for reaction in self.reactions:
-            if flux_id in reaction.computational_flux_ids:
-                return reaction
-        return None
-
-    def get_atom_mapping_for_flux(self, flux_id: str):
-        """
-        Get the specific atom mapping for a computational flux variable.
-
-        For variant reactions, returns the mapping for that specific variant.
-        For regular reactions, returns the complete atom mapping.
-
-        Args:
-            flux_id: Computational flux variable ID
-
-        Returns:
-            AtomMapping for this flux, or None if not found
-        """
-        from ..model.atom_mapping import AtomMapping
-
-        reaction = self.get_reaction_for_flux_id(flux_id)
-        if not reaction or not reaction.atom_mapping:
-            return None
-
-        if reaction.variant_ids and flux_id in reaction.variant_ids:
-            # Get the specific variant mapping
-            idx = reaction.variant_ids.index(flux_id)
-            if idx < len(reaction.atom_mapping.maps):
-                return AtomMapping(
-                    maps=[reaction.atom_mapping.maps[idx]], weights=[1.0]
-                )
-
-        return reaction.atom_mapping
+            if reaction.atom_mapping_ids is not None:
+                # Reaction has variants
+                ids.extend(reaction.atom_mapping_ids)
+            else:
+                # Regular reaction without variants
+                ids.append(reaction.id)
+        return frozenset(ids)
 
     def get_stoichiometric_matrix(self) -> jnp.ndarray:
         """
@@ -289,7 +255,7 @@ class FluxomicsDataModel(BaseModel):
         """Validate experiment references to metabolites and reactions."""
         metabolite_ids = self.metabolite_ids
         # Use computational reaction IDs for validation (includes variant IDs)
-        computational_ids = self.model.computational_reaction_ids
+        computational_reaction_ids = self.model.computational_reaction_ids
 
         # Check experiment names are unique
         if len(self.experiments) > 1:
@@ -312,7 +278,7 @@ class FluxomicsDataModel(BaseModel):
             if experiment.simulation and experiment.simulation.variables:
                 for flux_var in experiment.simulation.variables.flux_values:
                     # Check against computational IDs (includes variants)
-                    if flux_var.flux not in computational_ids:
+                    if flux_var.flux not in computational_reaction_ids:
                         raise ValueError(
                             f"Flux variable {flux_var.flux} in configuration "
                             f"{experiment.name} references unknown reaction"

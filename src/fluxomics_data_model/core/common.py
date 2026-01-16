@@ -129,6 +129,74 @@ class TimeSeries(BaseModel):
 T = TypeVar("T", bound=BaseModel)
 
 
+class AtomMappingsDict(dict):
+    """
+    A dictionary for storing atom mappings with a nice summary representation.
+
+    Keys are reaction IDs, values are AtomMapping objects.
+    """
+
+    def __repr__(self) -> str:
+        """String representation with summary information."""
+        if not self:
+            return "=== Atom Mappings ===\n  No atom mappings defined"
+
+        lines = ["=== Atom Mappings ==="]
+
+        # Total count
+        lines.append(f"  Total: {len(self)}")
+
+        # Count mappings with variants
+        with_variants = 0
+        for am in self.values():
+            if hasattr(am, 'maps') and len(am.maps) > 1:
+                with_variants += 1
+
+        if with_variants > 0:
+            lines.append(f"  Reactions with multiple variants: {with_variants}")
+
+        # Sample atom mappings
+        sample_size = min(5, len(self))
+        lines.append("")
+        lines.append("  Sample atom mappings:")
+        for rxn_id, am in list(self.items())[:sample_size]:
+            if hasattr(am, 'maps'):
+                n_maps = len(am.maps)
+                if n_maps > 1:
+                    lines.append(f"    - {rxn_id}: {n_maps} variants")
+                else:
+                    # Show letter notation for single map
+                    try:
+                        notation = am.to_letter_notation()
+                        if notation and len(notation) < 50:
+                            lines.append(f"    - {rxn_id}: {notation}")
+                        else:
+                            lines.append(f"    - {rxn_id}: (mapping defined)")
+                    except Exception:
+                        lines.append(f"    - {rxn_id}: (mapping defined)")
+            else:
+                lines.append(f"    - {rxn_id}: (mapping defined)")
+
+        if len(self) > sample_size:
+            lines.append(f"    ... and {len(self) - sample_size} more")
+
+        return "\n".join(lines)
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """Get Pydantic core schema for serialization/validation."""
+        # Get the schema for a dict
+        dict_schema = handler.generate_schema(dict)
+
+        # Return a schema that validates as a dict but returns an AtomMappingsDict
+        return core_schema.no_info_after_validator_function(
+            lambda v: cls(v),
+            dict_schema,
+        )
+
+
 class DictList(list, Generic[T]):
     """
     A combined dict and list data structure.
@@ -326,8 +394,113 @@ class DictList(list, Generic[T]):
                     self._dict[key] = idx - 1
 
     def __repr__(self) -> str:
-        """String representation of DictList."""
-        return f"DictList({list.__repr__(self)})"
+        """String representation of DictList with summary information."""
+        if not self:
+            return "DictList([])"
+
+        # Detect item type from first item
+        first_item = self[0]
+        item_type = type(first_item).__name__
+
+        lines = [f"=== {item_type}s ==="]
+
+        # Type-specific summaries
+        if item_type == "Metabolite":
+            lines.extend(self._metabolite_summary())
+        elif item_type == "Reaction":
+            lines.extend(self._reaction_summary())
+        else:
+            # Generic summary
+            sample_size = min(5, len(self))
+            lines.append("  Sample items:")
+            for item in list(self)[:sample_size]:
+                lines.append(f"    - {item.id}")
+            if len(self) > sample_size:
+                lines.append(f"    ... and {len(self) - sample_size} more")
+
+        return "\n".join(lines)
+
+    def _metabolite_summary(self) -> List[str]:
+        """Generate metabolite-specific summary lines."""
+        lines = []
+
+        # Total count
+        lines.append(f"  Total: {len(self)}")
+
+        # Count metabolites by compartment and attributes
+        compartments = {}
+        with_atoms = 0
+        with_formula = 0
+        with_inchi = 0
+        for m in self:
+            comp = m.compartment or "unspecified"
+            compartments[comp] = compartments.get(comp, 0) + 1
+            if m.atoms and m.atoms > 0:
+                with_atoms += 1
+            if m.formula:
+                with_formula += 1
+            # Check for InChI in annotations
+            if hasattr(m, 'annotations') and m.annotations:
+                for ann in m.annotations:
+                    if ann.name and ann.name.lower() in ('inchi', 'inchikey'):
+                        with_inchi += 1
+                        break
+
+        # Show compartment distribution
+        if len(compartments) > 1 or (len(compartments) == 1 and "unspecified" not in compartments):
+            lines.append("  By compartment:")
+            for comp, count in sorted(compartments.items()):
+                lines.append(f"    {comp}: {count}")
+
+        lines.append(f"  With atom counts: {with_atoms}")
+        lines.append(f"  With formula: {with_formula}")
+        lines.append(f"  With InChI: {with_inchi}")
+
+        # Sample metabolites
+        sample_size = min(5, len(self))
+        lines.append("")
+        lines.append("  Sample metabolites:")
+        for m in list(self)[:sample_size]:
+            atoms_str = f", atoms={m.atoms}" if m.atoms else ""
+            formula_str = f", formula={m.formula}" if m.formula else ""
+            comp_str = f" [{m.compartment}]" if m.compartment else ""
+            lines.append(f"    - {m.id}{comp_str}{atoms_str}{formula_str}")
+
+        if len(self) > sample_size:
+            lines.append(f"    ... and {len(self) - sample_size} more")
+
+        return lines
+
+    def _reaction_summary(self) -> List[str]:
+        """Generate reaction-specific summary lines."""
+        lines = []
+
+        # Total count
+        lines.append(f"  Total: {len(self)}")
+
+        # Count reaction types
+        reversible = sum(1 for r in self if r.reversibility)
+        irreversible = len(self) - reversible
+        variant_reactions = sum(1 for r in self if r.is_variant_reaction)
+        total_variants = sum(r.n_variants for r in self if r.is_variant_reaction)
+
+        lines.append(f"  Reversible: {reversible}")
+        lines.append(f"  Irreversible: {irreversible}")
+        if variant_reactions > 0:
+            lines.append(f"  With atom mapping variants: {variant_reactions} ({total_variants} total variants)")
+
+        # Sample reactions
+        sample_size = min(5, len(self))
+        lines.append("")
+        lines.append("  Sample reactions:")
+        for r in list(self)[:sample_size]:
+            variant_str = f" [{r.n_variants} variants]" if r.is_variant_reaction else ""
+            lines.append(f"    - {r.id}: {r.equation}{variant_str}")
+
+        if len(self) > sample_size:
+            lines.append(f"    ... and {len(self) - sample_size} more")
+
+        return lines
 
     def __copy__(self) -> "DictList[T]":
         """Create a shallow copy of the DictList."""

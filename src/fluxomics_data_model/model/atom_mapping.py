@@ -87,30 +87,74 @@ class AtomMapping(BaseModel):
     Complete atom mapping information for a reaction.
 
     Supports multiple alternative mappings (variants/symmetries).
+    Separated from Reaction class for cleaner design.
     """
 
-    maps: List[AtomMap] = Field(
-        default_factory=lambda: [AtomMap()],
-        description="List of alternative atom mappings",
+    reaction_id: str = Field(
+        description="Reaction identifier this mapping belongs to"
     )
-    weights: Optional[List[float]] = Field(
+    reactants: List[str] = Field(
+        description="Ordered list of reactant IDs (needed for atom-level operations)"
+    )
+    products: List[str] = Field(
+        description="Ordered list of product IDs (needed for atom-level operations)"
+    )
+    maps: Dict[str, AtomMap] = Field(
+        default_factory=dict,
+        description="Atom map variants keyed by atom_map_id (e.g., 'SCS___1' -> map)",
+    )
+    weights: Optional[Dict[str, float]] = Field(
         default=None,
         description="Weights for each mapping variant (defaults to uniform)",
     )
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    @classmethod
-    def from_letter_notation(
-        cls,
+    def __str__(self) -> str:
+        """String representation with summary information."""
+        return self.summary()
+
+    def summary(self) -> str:
+        """Return a summary of the atom mapping.
+
+        Returns:
+            String with information about the number of variants and their weights
+        """
+        num_maps = len(self.maps)
+
+        if num_maps == 0:
+            return f"AtomMapping(reaction_id='{self.reaction_id}', no maps)"
+
+        if num_maps == 1:
+            map_id = next(iter(self.maps.keys()))
+            return f"AtomMapping(reaction_id='{self.reaction_id}', single map: {map_id})"
+
+        # Multiple variants
+        lines = [
+            f"AtomMapping(reaction_id='{self.reaction_id}', {num_maps} variants):",
+        ]
+
+        for map_id in sorted(self.maps.keys()):
+            weight_str = ""
+            if self.weights and map_id in self.weights:
+                weight_str = f" [weight: {self.weights[map_id]:.3f}]"
+            lines.append(f"  - {map_id}{weight_str}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def parse_letter_notation(
         reactant_items: List[Tuple[str, str]],
         product_items: List[Tuple[str, str]],
-    ) -> "AtomMapping":
+    ) -> AtomMap:
         """Parse atom mapping from letter notation data without string building.
 
         Args:
             reactant_items: List of (compound_id, letter_cfg) tuples
             product_items: List of (product_id, letter_cfg) tuples
+
+        Returns:
+            Single AtomMap parsed from the notation
         """
         # Build a global list of all atoms from all reactants
         # (cpd, atom_idx, instance)
@@ -167,15 +211,19 @@ class AtomMapping(BaseModel):
 
                 letter_usage_count[ch] = usage_count + 1
 
-        return cls(maps=[atom_map])
+        return atom_map
 
-    def to_letter_notation(self) -> str:
+    def to_letter_notation(self, atom_map_id: Optional[str] = None) -> str:
         """Convert atom mapping to letter notation string.
+
+        Args:
+            atom_map_id: Optional atom map ID to use. If None, shows all variants
+                or uses the single map if only one exists.
 
         Returns a string representation of the atom mapping in letter
         notation format. If multiple elements are present, they are shown
-        on separate lines. If multiple mapping variants exist, they are
-        shown as alternatives.
+        on separate lines. If multiple mapping variants exist and no atom_map_id
+        is specified, shows all variants.
 
         Example: "A(abc) + B(de) -> C(abcde)"
         With elements: "C: A(ab) -> B(ab)\nN: A(c) -> B(c)"
@@ -188,20 +236,31 @@ class AtomMapping(BaseModel):
         if not self.maps:
             return ""
 
+        # If specific atom_map_id is requested
+        if atom_map_id is not None:
+            if atom_map_id not in self.maps:
+                raise KeyError(f"Atom map ID '{atom_map_id}' not found")
+            atom_map = self.maps[atom_map_id]
         # Handle multiple mapping variants
-        if len(self.maps) > 1:
+        elif len(self.maps) > 1:
             # For multiple variants, show each on a separate line
             results = []
-            for i, atom_map in enumerate(self.maps):
-                weight_str = f" [{self.weights[i]:.3f}]" if self.weights else ""
-                single_mapping = AtomMapping(maps=[atom_map])
-                result = single_mapping.to_letter_notation()
+            for map_id, atom_map in self.maps.items():
+                weight_str = f" [{self.weights[map_id]:.3f}]" if self.weights and map_id in self.weights else ""
+                # Create temporary AtomMapping for single map recursion
+                temp_mapping = AtomMapping(
+                    reaction_id=self.reaction_id,
+                    reactants=self.reactants,
+                    products=self.products,
+                    maps={map_id: atom_map}
+                )
+                result = temp_mapping.to_letter_notation(atom_map_id=map_id)
                 if result:
-                    results.append(f"Variant {i+1}{weight_str}: {result}")
+                    results.append(f"{map_id}{weight_str}: {result}")
             return "\n".join(results)
-
-        # Single mapping
-        atom_map = self.maps[0]
+        else:
+            # Single mapping
+            atom_map = next(iter(self.maps.values()))
         if not atom_map.mapping:
             return ""
 
@@ -287,13 +346,12 @@ class AtomMapping(BaseModel):
         else:
             return "\n".join(element_results)
 
-    @classmethod
-    def from_fluxml_cfg(
-        cls,
+    @staticmethod
+    def parse_fluxml_cfg(
         reactant_cfgs: Dict[str, str],
         product_cfgs: List[Tuple[str, str]],
         reactant_order: List[str],
-    ) -> "AtomMapping":
+    ) -> AtomMap:
         """Parse FluxML cfg strings.
 
         Args:
@@ -301,6 +359,9 @@ class AtomMapping(BaseModel):
             product_cfgs: List of (product_id, cfg string) tuples
             reactant_order: Ordered list of reactant IDs
                 (with repetitions for instances)
+
+        Returns:
+            Single AtomMap parsed from the cfg strings
 
         In product cfg "C#1@2 C#3@1", each token means:
         - C#k@r: take atom k from reactant at position r
@@ -357,20 +418,17 @@ class AtomMapping(BaseModel):
                     src_instance,
                 )
 
-        return cls(maps=[atom_map])
+        return atom_map
 
     def to_fluxml_string(
         self,
-        reactants: Optional[List[str]] = None,
-        products: Optional[List[str]] = None,
+        atom_map_id: Optional[str] = None,
     ) -> Optional[str]:
         """Convert to FluxML-style atom mapping string.
 
         Args:
-            reactants: Optional list of reactant IDs. If None,
-                derives from maps.
-            products: Optional list of product IDs. If None,
-                derives from maps.
+            atom_map_id: Optional atom map ID to use. If None and only one map exists,
+                uses that map. If multiple maps exist, must specify atom_map_id.
 
         Returns:
             FluxML-style string representation of the mapping
@@ -378,16 +436,29 @@ class AtomMapping(BaseModel):
         if not self.maps:
             return None
 
-        # Use first mapping (for variants, caller should iterate)
-        atom_map = self.maps[0]
-
-        # Derive reactants and products from mapping if not provided
-        if reactants is None:
-            reactants = sorted(
-                set(addr.mol for addr in atom_map.mapping.values())
+        # Select which atom map to use
+        if atom_map_id is not None:
+            if atom_map_id not in self.maps:
+                raise KeyError(f"Atom map ID '{atom_map_id}' not found")
+            atom_map = self.maps[atom_map_id]
+        elif len(self.maps) == 1:
+            atom_map = next(iter(self.maps.values()))
+        else:
+            raise ValueError(
+                "Multiple atom maps exist. Must specify atom_map_id."
             )
-        if products is None:
-            products = sorted(set(addr.mol for addr in atom_map.mapping.keys()))
+
+        # Use stored reactants and products for order
+        reactants = self.reactants
+        products = self.products
+
+        # Build mapping from (compound, instance) to reactant position (1-based)
+        reactant_position = {}
+        instance_counts: Dict[str, int] = {}
+        for pos, cpd in enumerate(reactants, start=1):
+            instance_counts[cpd] = instance_counts.get(cpd, 0) + 1
+            instance = instance_counts[cpd]
+            reactant_position[(cpd, instance)] = pos
 
         # Build reactant and product strings
         reactant_parts = []
@@ -431,17 +502,26 @@ class AtomMapping(BaseModel):
                             and prod_addr.instance == instance
                         ):
                             src_addr = atom_map.mapping[prod_addr]
+                            # Get the reactant position for this source atom
+                            src_pos = reactant_position.get((src_addr.mol, src_addr.instance))
+                            if src_pos is None:
+                                raise ValueError(
+                                    f"Source compound {src_addr.mol} instance {src_addr.instance} "
+                                    f"not found in reactant list"
+                                )
                             atoms.append(
                                 (
                                     prod_addr.index,
                                     prod_addr.element or "C",
-                                    src_addr.mol,
                                     src_addr.index,
+                                    src_pos,
                                 )
                             )
                     if atoms:
+                        # Format as "element#source_atom@reactant_position"
                         atom_str = " ".join(
-                            f"{at}#{pa}" for pa, at, _, _ in sorted(atoms)
+                            f"{at}#{src_idx}@{src_pos}"
+                            for pa, at, src_idx, src_pos in sorted(atoms)
                         )
                         num_inst = len(product_instances[cpd])
                         prefix = f"{num_inst}" if num_inst > 1 else ""
@@ -455,27 +535,60 @@ class AtomMapping(BaseModel):
         return f'"{reactant_side} => {product_side}"'
 
     def merge_symmetric_mappings(self, other: "AtomMapping") -> "AtomMapping":
-        """Merge with another mapping to handle symmetric reactions."""
-        new_maps = list(self.maps) + list(other.maps)
+        """Merge with another mapping to handle symmetric reactions.
+
+        Args:
+            other: Another AtomMapping to merge with (must have same reaction_id)
+
+        Returns:
+            New AtomMapping with combined maps
+        """
+        if self.reaction_id != other.reaction_id:
+            raise ValueError("Can only merge mappings for the same reaction")
+
+        # Combine maps with unique IDs
+        new_maps = dict(self.maps)
+        # Add suffix to other map IDs if there are conflicts
+        for map_id, atom_map in other.maps.items():
+            if map_id in new_maps:
+                # Add suffix to avoid conflict
+                counter = 1
+                new_id = f"{map_id}_alt{counter}"
+                while new_id in new_maps:
+                    counter += 1
+                    new_id = f"{map_id}_alt{counter}"
+                new_maps[new_id] = atom_map
+            else:
+                new_maps[map_id] = atom_map
+
         # If weights exist, combine them proportionally
+        new_weights = None
         if self.weights and other.weights:
             total = len(self.maps) + len(other.maps)
             self_weight = len(self.maps) / total
             other_weight = len(other.maps) / total
-            new_weights = [w * self_weight for w in self.weights] + [
-                w * other_weight for w in other.weights
-            ]
-        else:
-            new_weights = None
+            new_weights = {}
+            for map_id, w in self.weights.items():
+                new_weights[map_id] = w * self_weight
+            for map_id, w in other.weights.items():
+                # Use the potentially renamed key
+                actual_key = map_id if map_id not in self.maps else f"{map_id}_alt1"
+                new_weights[actual_key] = w * other_weight
 
-        return AtomMapping(maps=new_maps, weights=new_weights)
+        return AtomMapping(
+            reaction_id=self.reaction_id,
+            reactants=self.reactants,
+            products=self.products,
+            maps=new_maps,
+            weights=new_weights
+        )
 
     def transform_isotopomers(
         self,
         reactant_distributions: Dict[Tuple[str, int], np.ndarray],
-        reactant_order: List[str],
-        product_order: List[str],
-        which_map: int = 0,
+        reactant_order: Optional[List[str]] = None,
+        product_order: Optional[List[str]] = None,
+        atom_map_id: Optional[str] = None,
     ) -> Dict[Tuple[str, int], np.ndarray]:
         """Transform isotopomer distributions through the reaction.
 
@@ -483,18 +596,32 @@ class AtomMapping(BaseModel):
             reactant_distributions: Dict of (compound_id, instance) ->
                 isotopomer distribution
             reactant_order: Order of reactants (with repetitions for multiple
-                instances)
+                instances). If None, uses self.reactants.
             product_order: Order of products (with repetitions for multiple
-                instances)
-            which_map: Which mapping variant to use
+                instances). If None, uses self.products.
+            atom_map_id: Which mapping variant to use. If None and only one map exists,
+                uses that map.
 
         Returns:
             Dict of (product_id, instance) -> isotopomer distribution
         """
-        if which_map >= len(self.maps):
-            raise ValueError(f"Map index {which_map} out of range")
+        # Use stored order if not provided
+        if reactant_order is None:
+            reactant_order = self.reactants
+        if product_order is None:
+            product_order = self.products
 
-        atom_map = self.maps[which_map]
+        # Select which atom map to use
+        if atom_map_id is not None:
+            if atom_map_id not in self.maps:
+                raise KeyError(f"Atom map ID '{atom_map_id}' not found")
+            atom_map = self.maps[atom_map_id]
+        elif len(self.maps) == 1:
+            atom_map = next(iter(self.maps.values()))
+        else:
+            raise ValueError(
+                "Multiple atom maps exist. Must specify atom_map_id."
+            )
 
         # Build concatenated reactant atom order with instances
         src_atoms: List[Tuple[str, int, str, int]] = []
@@ -518,20 +645,24 @@ class AtomMapping(BaseModel):
             instance = product_instances[cpd]
             # Find max atom index for this product instance
             max_idx = 0
-            for p_cpd, p_atom, _, p_inst in atom_map.mapping.keys():
-                if p_cpd == cpd and p_inst == instance:
-                    max_idx = max(max_idx, p_atom)
+            for prod_addr in atom_map.mapping.keys():
+                if prod_addr.mol == cpd and prod_addr.instance == instance:
+                    max_idx = max(max_idx, prod_addr.index)
             for i in range(1, max_idx + 1):
                 prod_atoms.append((cpd, i, "C", instance))
 
         # Create mapping from product atom positions to source positions
         src_pos_lookup = {atom: i for i, atom in enumerate(src_atoms)}
         src_positions = []
-        for prod_atom in prod_atoms:
+        for prod_atom_tuple in prod_atoms:
+            # Convert tuple to AtomAddress
+            prod_atom = AtomAddress(*prod_atom_tuple)
             if prod_atom not in atom_map.mapping:
                 raise ValueError(f"Product atom {prod_atom} not in mapping")
             src_atom = atom_map.mapping[prod_atom]
-            src_positions.append(src_pos_lookup[src_atom])
+            # Convert src_atom back to tuple for lookup
+            src_atom_tuple = (src_atom.mol, src_atom.index, src_atom.element, src_atom.instance)
+            src_positions.append(src_pos_lookup[src_atom_tuple])
 
         # Build joint reactant distribution
         joint_dist = np.array([1.0])
@@ -585,23 +716,40 @@ class AtomMapping(BaseModel):
     def transform_with_symmetry(
         self,
         reactant_distributions: Dict[Tuple[str, int], np.ndarray],
-        reactant_order: List[str],
-        product_order: List[str],
+        reactant_order: Optional[List[str]] = None,
+        product_order: Optional[List[str]] = None,
     ) -> Dict[Tuple[str, int], np.ndarray]:
-        """Average isotopomer transformation over all mapping variants."""
+        """Average isotopomer transformation over all mapping variants.
+
+        Args:
+            reactant_distributions: Dict of (compound_id, instance) ->
+                isotopomer distribution
+            reactant_order: Order of reactants (with repetitions). If None, uses self.reactants.
+            product_order: Order of products (with repetitions). If None, uses self.products.
+
+        Returns:
+            Dict of (product_id, instance) -> isotopomer distribution
+        """
         if not self.maps:
             raise ValueError("No atom maps available")
 
-        weights = (
-            self.weights
-            if self.weights
-            else [1.0 / len(self.maps)] * len(self.maps)
-        )
+        # Use stored order if not provided
+        if reactant_order is None:
+            reactant_order = self.reactants
+        if product_order is None:
+            product_order = self.products
+
+        # Prepare weights
+        if self.weights:
+            weights = self.weights
+        else:
+            uniform_weight = 1.0 / len(self.maps)
+            weights = {map_id: uniform_weight for map_id in self.maps.keys()}
 
         result: Dict[Tuple[str, int], np.ndarray] = {}
-        for i, weight in enumerate(weights):
+        for map_id, weight in weights.items():
             prod_dists = self.transform_isotopomers(
-                reactant_distributions, reactant_order, product_order, i
+                reactant_distributions, reactant_order, product_order, atom_map_id=map_id
             )
             for key, dist in prod_dists.items():
                 if key not in result:

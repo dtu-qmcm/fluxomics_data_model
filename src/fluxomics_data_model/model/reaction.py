@@ -3,18 +3,39 @@ FluxML reaction definitions.
 """
 
 from typing import Optional, List, Dict
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 import jax.numpy as jnp
 from ..core.common import Annotation, JAXArray
-from .atom_mapping import AtomMapping
-
-
-# AtomMapping is now imported from atom_mapping.py
 
 
 class Reaction(BaseModel):
     """
-    Fluxomics Data Model reaction definition.
+    Represents a biochemical reaction in the metabolic network.
+
+    A reaction describes the transformation of reactants to products. Reactions can
+    have multiple atom mapping variants when symmetric compounds create ambiguity
+    in carbon atom transitions.
+
+    Attributes:
+        id: Base reaction identifier (e.g., "SCS" for variants "SCS___1", "SCS___2")
+        name: Optional human-readable name
+        reversibility: Whether the reaction can proceed in both directions
+        annotations: Additional metadata annotations
+        reactants: List of reactant metabolite IDs (in order)
+        products: List of product metabolite IDs (in order)
+        atom_mapping_ids: Computational flux variable IDs for variants.
+            None for single-map reactions, list of IDs for variant reactions.
+            Example: ["bsDAP___1", "bsDAP___2", "bsDAP___3", "bsDAP___4"]
+
+    Examples:
+        Simple reaction without variants:
+            Reaction(id="PGI", reactants=["G6P"], products=["F6P"])
+
+        Reaction with 4 variants due to symmetric compounds:
+            Reaction(id="bsDAP", reactants=["ASA", "PYR"],
+                    products=["DAP", "H2O"],
+                    atom_mapping_ids=["bsDAP___1", "bsDAP___2",
+                                     "bsDAP___3", "bsDAP___4"])
     """
 
     id: str = Field(description="Reaction identifier (base name for variants)")
@@ -31,18 +52,12 @@ class Reaction(BaseModel):
     products: List[str] = Field(
         default_factory=list, description="Product metabolite IDs"
     )
-    atom_mapping: Optional[AtomMapping] = Field(
-        default=None, description="Atom mappings for this reaction"
-    )
-    variant_ids: Optional[List[str]] = Field(
+    atom_mapping_ids: Optional[List[str]] = Field(
         default=None,
         description="Computational flux variable IDs for variants (e.g., ['SCS___1', 'SCS___2'])"
     )
 
     # JAX-compatible numerical representation
-    flux_bounds_array: Optional[JAXArray] = Field(
-        default=None, exclude=True, description="Flux bounds"
-    )
     stoichiometry_dict: Optional[Dict[str, float]] = Field(
         default=None, exclude=True, description="Stoichiometry"
     )
@@ -50,20 +65,6 @@ class Reaction(BaseModel):
     class Config:
         frozen = True
         extra = "forbid"
-
-    @field_validator("variant_ids")
-    @classmethod
-    def validate_variant_consistency(cls, v, info):
-        """Ensure variant_ids match atom_mapping if both present."""
-        if v is not None and len(v) > 0:
-            atom_mapping = info.data.get("atom_mapping")
-            if atom_mapping and len(atom_mapping.maps) > 0:
-                if len(v) != len(atom_mapping.maps):
-                    raise ValueError(
-                        f"Number of variant_ids ({len(v)}) must match "
-                        f"number of atom maps ({len(atom_mapping.maps)})"
-                    )
-        return v
 
     @property
     def reactant_ids(self) -> frozenset[str]:
@@ -82,25 +83,13 @@ class Reaction(BaseModel):
 
     @property
     def is_variant_reaction(self) -> bool:
-        """Check if this reaction has multiple mechanistic variants."""
-        return self.variant_ids is not None and len(self.variant_ids) > 1
+        """Check if this reaction has multiple atom map variants."""
+        return self.atom_mapping_ids is not None and len(self.atom_mapping_ids) > 1
 
     @property
     def n_variants(self) -> int:
-        """Number of mechanistic variants for this reaction."""
-        return len(self.variant_ids) if self.variant_ids else 1
-
-    @property
-    def computational_flux_ids(self) -> List[str]:
-        """
-        Get flux variable IDs for computational space.
-
-        For variant reactions, returns all variant IDs.
-        For regular reactions, returns the base ID.
-
-        This is the key method for projection from biological to computational space.
-        """
-        return self.variant_ids if self.variant_ids else [self.id]
+        """Number of atom map variants for this reaction."""
+        return len(self.atom_mapping_ids) if self.atom_mapping_ids else 1
 
     @property
     def flux_bounds(self) -> jnp.ndarray:
@@ -119,15 +108,6 @@ class Reaction(BaseModel):
         products = " + ".join(self.products)
         arrow = " <=> " if self.reversibility else " => "
         return f"{reactants}{arrow}{products}"
-
-    def get_atom_mapping_string(self) -> Optional[str]:
-        """
-        Get the complete atom mapping for this reaction as a string.
-        """
-        if not self.atom_mapping:
-            return None
-
-        return self.atom_mapping.to_fluxml_string(self.reactants, self.products)
 
     def with_flux_bounds(self, lower: float, upper: float) -> "Reaction":
         """Create new reaction with specified flux bounds."""

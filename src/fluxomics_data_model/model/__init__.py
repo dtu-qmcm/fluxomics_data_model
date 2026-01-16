@@ -22,7 +22,7 @@ from ..experiment.measurement import (
     Datum,
     MeasurementModel,
 )
-from ..experiment.simulation import (
+from ..output.simulation import (
     Simulation,
     Variables,
     FluxValue,
@@ -34,6 +34,7 @@ from .constraint import (
     ExchangeConstraints,
     MetaboliteSizeConstraints,
 )
+from .constraint_eval import ConstraintEvaluator
 from ..core.core import Experiments
 from ..experiment.tracer import Tracers, LabelComposition
 from ..core.common import Annotation, ErrorModel, TextualOrMath, DictList
@@ -66,6 +67,7 @@ __all__ = [
     "NetConstraints",
     "ExchangeConstraints",
     "MetaboliteSizeConstraints",
+    "ConstraintEvaluator",
     "Experiments",
     "Tracers",
     "LabelComposition",
