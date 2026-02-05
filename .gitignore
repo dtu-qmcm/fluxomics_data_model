@@ -12,3 +12,4 @@ site/
 .venv/
 *.egg-info/
 *.egg
+linkml/
