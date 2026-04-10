@@ -35,7 +35,12 @@ from ..experiment.measurement import (
     NetFlux,
     Datum,
 )
-from ..output.simulation import Simulation, Variables, FluxValue, MetaboliteSizeValue
+from ..output.simulation import (
+    Simulation,
+    Variables,
+    FluxValue,
+    MetaboliteSizeValue,
+)
 
 
 class FreefluxParser:
@@ -88,9 +93,7 @@ class FreefluxParser:
         # Find and parse reactions file (required)
         reactions_path = self._find_file(base_path, "reactions")
         if not reactions_path:
-            raise FileNotFoundError(
-                f"Reactions file not found in: {base_path}"
-            )
+            raise FileNotFoundError(f"Reactions file not found in: {base_path}")
 
         self._parse_reactions(reactions_path)
 
@@ -123,7 +126,9 @@ class FreefluxParser:
 
         if measurement or simulation:
             # Determine if we have inst_MDVs (non-stationary)
-            has_inst_mdvs = self._find_file(base_path, "measured_inst_MDVs") is not None
+            has_inst_mdvs = (
+                self._find_file(base_path, "measured_inst_MDVs") is not None
+            )
 
             experiment = Experiments(
                 name=base_path.name,
@@ -160,7 +165,7 @@ class FreefluxParser:
         suffix = file_path.suffix.lower()
 
         if suffix == ".xlsx":
-            df = pd.read_excel(file_path, comment="#")
+            df = pd.read_excel(file_path)
         elif suffix == ".csv":
             df = pd.read_csv(file_path, comment="#")
         else:  # .tsv
@@ -207,7 +212,11 @@ class FreefluxParser:
             rxn_id = str(row.get(col_map.get("reaction_id", ""), "")).strip()
 
             # Skip empty rows or section headers (start with #)
-            if not rxn_id or rxn_id.startswith("#") or pd.isna(row.get(col_map.get("reaction_id", ""))):
+            if (
+                not rxn_id
+                or rxn_id.startswith("#")
+                or pd.isna(row.get(col_map.get("reaction_id", "")))
+            ):
                 continue
 
             substrates_str = str(row.get(col_map.get("substrates", ""), ""))
@@ -215,9 +224,17 @@ class FreefluxParser:
             rev_value = row.get(col_map.get("reversibility", ""), 0)
 
             # Skip if no substrates or products
-            if pd.isna(substrates_str) or substrates_str == "nan" or not substrates_str.strip():
+            if (
+                pd.isna(substrates_str)
+                or substrates_str == "nan"
+                or not substrates_str.strip()
+            ):
                 continue
-            if pd.isna(products_str) or products_str == "nan" or not products_str.strip():
+            if (
+                pd.isna(products_str)
+                or products_str == "nan"
+                or not products_str.strip()
+            ):
                 continue
 
             # Parse reversibility
@@ -226,7 +243,11 @@ class FreefluxParser:
                 if isinstance(rev_value, (int, float)):
                     reversible = int(rev_value) == 1
                 elif isinstance(rev_value, str):
-                    reversible = rev_value.strip().lower() in ("1", "true", "yes")
+                    reversible = rev_value.strip().lower() in (
+                        "1",
+                        "true",
+                        "yes",
+                    )
 
             # Parse substrates and products with atom mappings
             reactants, reactant_atoms = self._parse_compounds(substrates_str)
@@ -246,13 +267,21 @@ class FreefluxParser:
             )
             self._reactions[rxn_id] = reaction
 
-            # Create atom mapping if atoms are specified
+            # Create atom mapping if atoms are specified (skip if there's an error)
             if reactant_atoms and product_atoms:
-                atom_mapping = self._create_atom_mapping(
-                    rxn_id, reactants, products, reactant_atoms, product_atoms
-                )
-                if atom_mapping:
-                    self._atom_mappings[rxn_id] = atom_mapping
+                try:
+                    atom_mapping = self._create_atom_mapping(
+                        rxn_id,
+                        reactants,
+                        products,
+                        reactant_atoms,
+                        product_atoms,
+                    )
+                    if atom_mapping:
+                        self._atom_mappings[rxn_id] = atom_mapping
+                except (ValueError, KeyError) as e:
+                    # Skip reactions with invalid atom mappings
+                    pass
 
     def _parse_compounds(
         self, compounds_str: str
@@ -309,7 +338,9 @@ class FreefluxParser:
         Handles symmetric compounds with comma-separated atom variants.
         """
         # Check for symmetric compounds (comma-separated atom strings)
-        has_variants = any("," in atoms for _, atoms in reactant_atoms + product_atoms)
+        has_variants = any(
+            "," in atoms for _, atoms in reactant_atoms + product_atoms
+        )
 
         if has_variants:
             # Generate all variant combinations
@@ -352,8 +383,16 @@ class FreefluxParser:
             product_variants.append([(cpd, v.strip()) for v in variants])
 
         # Generate all combinations
-        all_reactant_combos = list(cartesian_product(*reactant_variants)) if reactant_variants else [()]
-        all_product_combos = list(cartesian_product(*product_variants)) if product_variants else [()]
+        all_reactant_combos = (
+            list(cartesian_product(*reactant_variants))
+            if reactant_variants
+            else [()]
+        )
+        all_product_combos = (
+            list(cartesian_product(*product_variants))
+            if product_variants
+            else [()]
+        )
 
         maps_dict = {}
         variant_idx = 1
@@ -364,8 +403,15 @@ class FreefluxParser:
                 p_items = list(p_combo) if p_combo else product_atoms
 
                 try:
-                    atom_map = AtomMapping.parse_letter_notation(r_items, p_items)
-                    map_id = f"{rxn_id}___{variant_idx}" if len(all_reactant_combos) * len(all_product_combos) > 1 else rxn_id
+                    atom_map = AtomMapping.parse_letter_notation(
+                        r_items, p_items
+                    )
+                    map_id = (
+                        f"{rxn_id}___{variant_idx}"
+                        if len(all_reactant_combos) * len(all_product_combos)
+                        > 1
+                        else rxn_id
+                    )
                     maps_dict[map_id] = atom_map
                     variant_idx += 1
                 except Exception:
@@ -452,7 +498,9 @@ class FreefluxParser:
 
         return flux_values if flux_values else None
 
-    def _parse_concentrations(self, base_path: Path) -> Optional[List[MetaboliteSizeValue]]:
+    def _parse_concentrations(
+        self, base_path: Path
+    ) -> Optional[List[MetaboliteSizeValue]]:
         """
         Parse concentrations file containing metabolite pool sizes.
 
@@ -496,7 +544,9 @@ class FreefluxParser:
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
         """Parse measurement files (measured_MDVs, measured_fluxes, measured_inst_MDVs)."""
         # Parse steady-state MDV measurements
-        labeling_measurement, labeling_data = self._parse_measured_mdvs(base_path)
+        labeling_measurement, labeling_data = self._parse_measured_mdvs(
+            base_path
+        )
 
         # Parse time-course MDV measurements
         inst_labeling, inst_data = self._parse_measured_inst_mdvs(base_path)
@@ -507,7 +557,9 @@ class FreefluxParser:
         # Merge labeling measurements
         if inst_labeling and labeling_measurement:
             # Combine groups
-            all_groups = list(labeling_measurement.groups) + list(inst_labeling.groups)
+            all_groups = list(labeling_measurement.groups) + list(
+                inst_labeling.groups
+            )
             labeling_measurement = LabelingMeasurement(groups=all_groups)
         elif inst_labeling:
             labeling_measurement = inst_labeling
@@ -564,7 +616,9 @@ class FreefluxParser:
         data: List[Datum] = []
 
         for _, row in df.iterrows():
-            fragment_id = str(row.get(col_map.get("fragment_id", ""), "")).strip()
+            fragment_id = str(
+                row.get(col_map.get("fragment_id", ""), "")
+            ).strip()
             mean_str = str(row.get(col_map.get("mean", ""), ""))
             sd_str = str(row.get(col_map.get("sd", ""), ""))
 
@@ -614,10 +668,7 @@ class FreefluxParser:
         if not groups:
             return None, None
 
-        return (
-            LabelingMeasurement(groups=list(groups.values())),
-            data
-        )
+        return (LabelingMeasurement(groups=list(groups.values())), data)
 
     def _parse_measured_inst_mdvs(
         self, base_path: Path
@@ -655,7 +706,9 @@ class FreefluxParser:
         time_points: Dict[str, List[float]] = defaultdict(list)
 
         for _, row in df.iterrows():
-            fragment_id = str(row.get(col_map.get("fragment_id", ""), "")).strip()
+            fragment_id = str(
+                row.get(col_map.get("fragment_id", ""), "")
+            ).strip()
             time_val = row.get(col_map.get("time", ""), None)
             mean_str = str(row.get(col_map.get("mean", ""), ""))
             sd_str = str(row.get(col_map.get("sd", ""), ""))
@@ -717,17 +770,16 @@ class FreefluxParser:
         for group_id, group in groups.items():
             times = sorted(set(time_points.get(group_id, [])))
             times_str = ",".join(str(t) for t in times) if times else None
-            updated_groups.append(Group(
-                id=group.id,
-                times=times_str,
-                scale=group.scale,
-                expression=group.expression,
-            ))
+            updated_groups.append(
+                Group(
+                    id=group.id,
+                    times=times_str,
+                    scale=group.scale,
+                    expression=group.expression,
+                )
+            )
 
-        return (
-            LabelingMeasurement(groups=updated_groups),
-            data
-        )
+        return (LabelingMeasurement(groups=updated_groups), data)
 
     def _parse_measured_fluxes(
         self, base_path: Path
@@ -790,10 +842,7 @@ class FreefluxParser:
         if not net_fluxes:
             return None, None
 
-        return (
-            FluxMeasurement(net_fluxes=net_fluxes),
-            data
-        )
+        return (FluxMeasurement(net_fluxes=net_fluxes), data)
 
     def _parse_comma_values(self, value_str: str) -> List[float]:
         """Parse comma-separated values into list of floats."""
@@ -801,7 +850,7 @@ class FreefluxParser:
             return []
 
         # Remove quotes if present
-        value_str = value_str.strip('"\'')
+        value_str = value_str.strip("\"'")
 
         values = []
         for v in value_str.split(","):

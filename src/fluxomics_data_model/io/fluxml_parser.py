@@ -2,11 +2,14 @@
 FluxML XML parser for reading FluxML files.
 """
 
+import logging
 import xml.etree.ElementTree as ET
 from typing import Optional, List, Tuple, Dict
 from datetime import datetime
 import re
 from itertools import product
+
+logger = logging.getLogger(__name__)
 
 from ..model import (
     FluxomicsDataModel,
@@ -254,7 +257,7 @@ class FluxMLParser:
             if cfg:
                 reactant_cfgs.append((reduct_id, cfg))
 
-        # Parse products and check for variants
+        # Parse reactants and check for variants
         products = []
         product_cfgs = []
         # Store variants for products with multiple mappings
@@ -288,6 +291,22 @@ class FluxMLParser:
                 if cfg:
                     product_cfgs.append((rproduct_id, cfg))
 
+        # Also collect reactant variants (some FluxML files put variants on reduct)
+        reactant_variants: Dict[str, List[Tuple[str, Optional[float]]]] = {}
+        for reduct_elem in reaction_elem.findall(f"{ns_prefix}reduct"):
+            reduct_id = reduct_elem.get("id")
+            variant_elems = reduct_elem.findall(f"{ns_prefix}variant")
+            if variant_elems:
+                variants = []
+                for variant_elem in variant_elems:
+                    cfg = variant_elem.get("cfg")
+                    ratio_str = variant_elem.get("ratio")
+                    ratio = float(ratio_str) if ratio_str else None
+                    if cfg:
+                        variants.append((cfg, ratio))
+                if variants:
+                    reactant_variants[reduct_id] = variants
+
         # Build atom mapping if configurations exist
         atom_mapping = None
         if product_cfgs:
@@ -296,62 +315,83 @@ class FluxMLParser:
             weights_dict = {}
 
             # Check if we have variants
-            if product_variants and atom_mapping_ids:
+            if (product_variants or reactant_variants) and atom_mapping_ids:
                 # Generate Cartesian product of all variant combinations
-                # Build list of (product_id, variants) for products with variants
-                variant_product_list = []
+                # Collect variant lists for both reactants and products
+                variant_compound_list = []
+
+                for rct_id in reactants:
+                    if rct_id in reactant_variants:
+                        variant_compound_list.append(
+                            ("reactant", rct_id, reactant_variants[rct_id])
+                        )
+
                 for prod_id in products:
                     if prod_id in product_variants:
-                        variant_product_list.append((prod_id, product_variants[prod_id]))
+                        variant_compound_list.append(
+                            ("product", prod_id, product_variants[prod_id])
+                        )
 
-                if variant_product_list:
+                if variant_compound_list:
                     # Generate all combinations using Cartesian product
-                    # Extract just the variant lists for itertools.product
-                    variant_lists = [variants for _, variants in variant_product_list]
+                    variant_lists = [
+                        variants for _, _, variants in variant_compound_list
+                    ]
                     all_combinations = list(product(*variant_lists))
+
+                    # If atom_mapping_ids doesn't match, derive from base name
+                    base_name = atom_mapping_ids[0].split("___")[0]
+                    expected_count = len(all_combinations)
+                    if len(atom_mapping_ids) != expected_count:
+                        atom_mapping_ids = [
+                            f"{base_name}___{i + 1}"
+                            for i in range(expected_count)
+                        ]
 
                     # For each combination, create an atom map
                     for variant_idx, combination in enumerate(all_combinations):
-                        if variant_idx >= len(atom_mapping_ids):
-                            break
+                        # Build reactant/product cfgs for this combination
+                        variant_reactant_cfgs = list(reactant_cfgs)
+                        variant_product_cfgs = list(product_cfgs)
 
-                        # Build product_cfgs for this combination
-                        variant_product_cfgs = []
-                        combination_dict = {
-                            variant_product_list[i][0]: combo_item
-                            for i, combo_item in enumerate(combination)
-                        }
-
-                        # Calculate weight for this combination (product of individual ratios)
+                        # Map compound -> chosen variant cfg
                         combination_weight = None
-                        for cfg, ratio in combination:
+                        for i, (side, cpd_id, _) in enumerate(
+                            variant_compound_list
+                        ):
+                            cfg, ratio = combination[i]
                             if ratio is not None:
                                 if combination_weight is None:
                                     combination_weight = ratio
                                 else:
                                     combination_weight *= ratio
 
-                        for prod_id, cfg in product_cfgs:
-                            if prod_id in combination_dict:
-                                variant_cfg, _ = combination_dict[prod_id]
-                                variant_product_cfgs.append((prod_id, variant_cfg))
+                            if side == "reactant":
+                                variant_reactant_cfgs = [
+                                    (c, cfg) if c == cpd_id else (c, v)
+                                    for c, v in variant_reactant_cfgs
+                                ]
                             else:
-                                variant_product_cfgs.append((prod_id, cfg))
+                                variant_product_cfgs = [
+                                    (c, cfg) if c == cpd_id else (c, v)
+                                    for c, v in variant_product_cfgs
+                                ]
 
                         # Parse based on format
-                        sample_cfg = variant_product_cfgs[0][1]
+                        all_cfgs = variant_reactant_cfgs + variant_product_cfgs
+                        sample_cfg = all_cfgs[0][1] if all_cfgs else ""
                         atom_map = None
-                        if re.search(r"[A-Z]#\d+@\d+", sample_cfg):
-                            # C#1@2 format
+                        if sample_cfg and re.search(
+                            r"[A-Z]#\d+@\d+", sample_cfg
+                        ):
                             atom_map = AtomMapping.parse_fluxml_cfg(
-                                reactant_cfgs=dict(reactant_cfgs),
+                                reactant_cfgs=dict(variant_reactant_cfgs),
                                 product_cfgs=variant_product_cfgs,
                                 reactant_order=reactants,
                             )
-                        elif re.search(r"[a-zA-Z]", sample_cfg):
-                            # Letter notation
+                        elif sample_cfg and re.search(r"[a-zA-Z]", sample_cfg):
                             atom_map = AtomMapping.parse_letter_notation(
-                                reactant_items=reactant_cfgs,
+                                reactant_items=variant_reactant_cfgs,
                                 product_items=variant_product_cfgs,
                             )
 
@@ -365,11 +405,16 @@ class FluxMLParser:
                     if weights_dict:
                         total_weight = sum(weights_dict.values())
                         if total_weight > 0:
-                            weights_dict = {k: v / total_weight for k, v in weights_dict.items()}
+                            weights_dict = {
+                                k: v / total_weight
+                                for k, v in weights_dict.items()
+                            }
                     else:
                         # Use uniform weights
                         uniform_weight = 1.0 / len(maps_dict)
-                        weights_dict = {k: uniform_weight for k in maps_dict.keys()}
+                        weights_dict = {
+                            k: uniform_weight for k in maps_dict.keys()
+                        }
 
                     # Create mapping with all variants
                     if maps_dict:
@@ -378,7 +423,7 @@ class FluxMLParser:
                             reactants=reactants,
                             products=products,
                             maps=maps_dict,
-                            weights=weights_dict
+                            weights=weights_dict,
                         )
             else:
                 # No variants, single mapping
@@ -405,7 +450,7 @@ class FluxMLParser:
                         reaction_id=reaction_id,
                         reactants=reactants,
                         products=products,
-                        maps=maps_dict
+                        maps=maps_dict,
                     )
 
         return Reaction(
@@ -504,30 +549,33 @@ class FluxMLParser:
         if textual_elem is not None and textual_elem.text:
             textual = textual_elem.text
             # Split by semicolons and process each formula
-            lines = textual.split(';')
+            lines = textual.split(";")
             for line in lines:
                 line = line.strip()
                 # Skip empty lines and comments
-                if not line or line.startswith('<!--') or line.startswith('//'):
+                if not line or line.startswith("<!--") or line.startswith("//"):
                     continue
 
                 # Check for named constraint (format: "name: expression")
                 name = None
-                if ':' in line:
-                    parts = line.split(':', 1)
+                if ":" in line:
+                    parts = line.split(":", 1)
                     # Check if this is actually a constraint name (not part of formula)
                     # Named constraints have format "name: formula" where name doesn't contain operators
                     potential_name = parts[0].strip()
-                    if not any(op in potential_name for op in ['<', '>', '=', '+', '-', '*', '/', '(', ')']):
+                    if not any(
+                        op in potential_name
+                        for op in ["<", ">", "=", "+", "-", "*", "/", "(", ")"]
+                    ):
                         name = potential_name
                         line = parts[1].strip()
 
                 if line:  # Only add non-empty expressions
-                    formulas.append(ConstraintFormula(
-                        name=name,
-                        expression=line,
-                        is_mathml=False
-                    ))
+                    formulas.append(
+                        ConstraintFormula(
+                            name=name, expression=line, is_mathml=False
+                        )
+                    )
 
         # Check for MathML content
         math_elems = elem.findall(f"{ns_prefix}math")
@@ -535,11 +583,9 @@ class FluxMLParser:
             mathml = ET.tostring(math_elem, encoding="unicode")
             # Try to extract constraint name from attributes if present
             name = math_elem.get("name") or math_elem.get("id")
-            formulas.append(ConstraintFormula(
-                name=name,
-                expression=mathml,
-                is_mathml=True
-            ))
+            formulas.append(
+                ConstraintFormula(name=name, expression=mathml, is_mathml=True)
+            )
 
         return formulas
 
@@ -883,6 +929,24 @@ class FluxMLParser:
 
         return MeasurementData(data=data)
 
+    def _parse_datum_value(self, value_text: str, datum_id: str) -> float:
+        """Parse a datum value string, handling malformed scientific notation.
+
+        Some FluxML files have truncated exponents like 'e-0' where the final
+        digit was lost (e.g., '8.769e-07' became '8.769e-0'). Since the lost
+        digit cannot be recovered, the value is set to 0.0 with a warning.
+        """
+        stripped = value_text.strip()
+        if re.search(r"e[+-]0$", stripped):
+            logger.warning(
+                "Datum '%s': malformed scientific notation '%s' "
+                "(truncated exponent). Setting value to 0.0.",
+                datum_id,
+                stripped,
+            )
+            return 0.0
+        return float(stripped)
+
     def _parse_datum(self, datum_elem: ET.Element) -> Datum:
         """Parse datum element."""
         datum_id = datum_elem.get("id")
@@ -906,13 +970,21 @@ class FluxMLParser:
         pos_str = datum_elem.get("pos")
         pos = int(pos_str) if pos_str else None
 
+        # FluxML uses "weight" to denote the mass isotopomer position (M0, M1, ...)
+        # Map it to pos when pos is not explicitly set
+        if pos is None and weight is not None:
+            try:
+                pos = int(weight)
+            except ValueError:
+                pass
+
         datum_type = datum_elem.get("type")
 
         # Parse value from element text
         value_text = datum_elem.text
         if not value_text:
             raise ValueError("Datum must have a value in its text content")
-        value = float(value_text.strip())
+        value = self._parse_datum_value(value_text, datum_id)
 
         return Datum(
             id=datum_id,

@@ -89,8 +89,14 @@ class Tracers(BaseModel):
 
     @model_validator(mode="after")
     def validate_fractions(self) -> "Tracers":
-        """Validate that float fractions sum to 1."""
-        # Only validate if all labels have float fractions
+        """Validate that float fractions sum to approximately 1.0.
+
+        Allows fractions < 1.0 when natural abundance is not explicitly
+        specified (common in influx_si .linp files where the unlabeled
+        remainder is implied). Raises if sum exceeds 1.0.
+        """
+        import warnings
+
         float_fractions = []
         has_float_fractions = False
 
@@ -99,15 +105,19 @@ class Tracers(BaseModel):
                 has_float_fractions = True
                 float_fractions.append(label.fraction)
             elif label.fraction is not None:
-                # If non-float fractions (e.g., expressions) exist,
-                # skip validation
                 return self
 
         if has_float_fractions and float_fractions:
             total = sum(float_fractions)
-            if abs(total - 1.0) > 1e-6:  # Allow small floating point errors
+            if total > 1.0 + 1e-6:
                 raise ValueError(
-                    f"Label fractions must sum to 1.0, got {total}"
+                    f"Label fractions sum to {total}, which exceeds 1.0"
+                )
+            if abs(total - 1.0) > 1e-6:
+                warnings.warn(
+                    f"Label fractions sum to {total:.6f} (expected 1.0). "
+                    f"The remainder is assumed to be natural abundance.",
+                    stacklevel=2,
                 )
 
         return self

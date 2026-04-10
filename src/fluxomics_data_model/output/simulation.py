@@ -56,6 +56,10 @@ class MetaboliteSizeValue(BaseModel):
     lo: Optional[float] = Field(default=None, description="Lower bound")
     hi: Optional[float] = Field(default=None, description="Upper bound")
     inc: Optional[float] = Field(default=None, description="Increment")
+    type: Optional[str] = Field(
+        default=None,
+        description="Variable type: F=Free, D=Dependent, C=Constrained",
+    )
     edweight: float = Field(
         default=1.0, ge=0.0, le=1.0, description="ED weight"
     )

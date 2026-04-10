@@ -36,12 +36,19 @@ from ..experiment.measurement import (
     MeasurementData,
     LabelingMeasurement,
     FluxMeasurement,
+    MetaboliteSizeMeasurement,
+    MetaboliteSize,
     Group,
     NetFlux,
     ExchangeFlux,
     Datum,
 )
-from ..output.simulation import Simulation, Variables, FluxValue
+from ..output.simulation import (
+    Simulation,
+    Variables,
+    FluxValue,
+    MetaboliteSizeValue,
+)
 
 
 class MTFParser:
@@ -49,13 +56,14 @@ class MTFParser:
 
     # File extensions in MTF format
     EXTENSIONS = {
-        "netw": ".netw",  # Network definition
-        "linp": ".linp",  # Label input
-        "miso": ".miso",  # MS isotopomer measurements
-        "mflux": ".mflux",  # Flux measurements
-        "cnstr": ".cnstr",  # Constraints
-        "tvar": ".tvar",  # Variable types
-        "opt": ".opt",  # Options
+        "netw": ".netw",
+        "linp": ".linp",
+        "miso": ".miso",
+        "mflux": ".mflux",
+        "mmet": ".mmet",
+        "cnstr": ".cnstr",
+        "tvar": ".tvar",
+        "opt": ".opt",
     }
 
     def __init__(self):
@@ -307,7 +315,14 @@ class MTFParser:
                     sep="\t",
                     comment="#",
                     header=0,
-                    names=["Id", "Comment", "Kind", "Formula", "Operator", "Value"],
+                    names=[
+                        "Id",
+                        "Comment",
+                        "Kind",
+                        "Formula",
+                        "Operator",
+                        "Value",
+                    ],
                 )
 
                 for _, row in df.iterrows():
@@ -428,7 +443,7 @@ class MTFParser:
 
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
         """
-        Parse measurement files (.miso, .mflux).
+        Parse measurement files (.miso, .mflux, .mmet).
         """
         # Parse MS isotopomer measurements
         labeling_measurement, labeling_data = self._parse_miso(base_path)
@@ -436,16 +451,24 @@ class MTFParser:
         # Parse flux measurements
         flux_measurement, flux_data = self._parse_mflux(base_path)
 
-        if not labeling_measurement and not flux_measurement:
+        # Parse metabolite size measurements
+        metabolitesize_measurement, mmet_data = self._parse_mmet(base_path)
+
+        if (
+            not labeling_measurement
+            and not flux_measurement
+            and not metabolitesize_measurement
+        ):
             return None
 
         # Combine data
-        all_data = (labeling_data or []) + (flux_data or [])
+        all_data = (labeling_data or []) + (flux_data or []) + (mmet_data or [])
 
         return Measurement(
             model=MeasurementModel(
                 labeling_measurement=labeling_measurement,
                 flux_measurement=flux_measurement,
+                metabolitesize_measurement=metabolitesize_measurement,
             ),
             data=MeasurementData(data=all_data),
         )
@@ -478,22 +501,39 @@ class MTFParser:
                 sep="\t",
                 comment="#",
                 header=0,
-                names=[
-                    "Id",
-                    "Comment",
-                    "Specie",
-                    "Fragment",
-                    "Dataset",
-                    "Isospecies",
-                    "Value",
-                    "SD",
-                    "Time",
-                ],
             )
+
+            # Standardize column names (case-insensitive, partial match)
+            col_map = {}
+            for col in df.columns:
+                col_lower = col.strip().lower()
+                if col_lower == "specie" or col_lower == "species":
+                    col_map[col] = "Specie"
+                elif col_lower == "fragment":
+                    col_map[col] = "Fragment"
+                elif col_lower == "dataset":
+                    col_map[col] = "Dataset"
+                elif col_lower == "isospecies":
+                    col_map[col] = "Isospecies"
+                elif col_lower == "value":
+                    col_map[col] = "Value"
+                elif col_lower == "sd" or col_lower == "std":
+                    col_map[col] = "SD"
+                elif col_lower == "time":
+                    col_map[col] = "Time"
+            df = df.rename(columns=col_map)
 
             for _, row in df.iterrows():
                 specie = str(row.get("Specie", "")).strip()
-                fragment = str(row.get("Fragment", "")).strip()
+                _frag_raw = row.get("Fragment")
+                if pd.isna(_frag_raw):
+                    fragment = ""
+                else:
+                    fragment = str(_frag_raw).strip()
+                    try:
+                        fragment = str(int(float(fragment)))
+                    except (ValueError, OverflowError):
+                        pass
                 dataset = str(row.get("Dataset", "")).strip()
                 isospecies = str(row.get("Isospecies", "")).strip()
                 value = row.get("Value")
@@ -542,44 +582,54 @@ class MTFParser:
                 fragment = info["fragment"]
                 isospecies_set = info["isospecies"]
 
-                # Build atom fragment part: [1,2,3,4] or [1-4] for contiguous
+                # Build atom fragment part
                 if fragment:
-                    positions = [int(p) for p in fragment.split(",")]
-                    positions.sort()
-                    # Check if contiguous for compact notation
-                    if positions == list(
-                        range(positions[0], positions[-1] + 1)
-                    ):
-                        if len(positions) > 2:
-                            atom_str = f"[{positions[0]}-{positions[-1]}]"
-                        else:
-                            atom_str = (
-                                f"[{','.join(str(p) for p in positions)}]"
-                            )
+                    is_cumomer = bool(
+                        re.match(r"^[01xX]+$", fragment.replace(",", ""))
+                    )
+                    if is_cumomer:
+                        atom_str = f":{fragment}"
                     else:
-                        atom_str = f"[{','.join(str(p) for p in positions)}]"
+                        try:
+                            positions = [int(p) for p in fragment.split(",")]
+                            positions.sort()
+                            if positions == list(
+                                range(positions[0], positions[-1] + 1)
+                            ):
+                                if len(positions) > 2:
+                                    atom_str = (
+                                        f"[{positions[0]}-{positions[-1]}]"
+                                    )
+                                else:
+                                    atom_str = f"[{','.join(str(p) for p in positions)}]"
+                            else:
+                                atom_str = (
+                                    f"[{','.join(str(p) for p in positions)}]"
+                                )
+                        except ValueError:
+                            atom_str = f"[{fragment}]"
                 else:
                     atom_str = ""
 
-                # Build mass isotopomer part: #M0,1,2,3,4
+                # Build mass isotopomer part
                 if isospecies_set:
-                    # Sort by mass number (M0, M1, M2, ...)
-                    sorted_iso = sorted(
-                        isospecies_set,
-                        key=lambda x: int(x[1:])
-                        if x.startswith("M") and x[1:].isdigit()
-                        else 0,
+                    all_mass = all(
+                        iso.startswith("M") and iso[1:].isdigit()
+                        for iso in isospecies_set
                     )
-                    # Extract just the numbers after M
-                    mass_numbers = [
-                        iso[1:] if iso.startswith("M") else iso
-                        for iso in sorted_iso
-                    ]
-                    mass_str = f"#M{','.join(mass_numbers)}"
+                    if all_mass:
+                        sorted_iso = sorted(
+                            isospecies_set,
+                            key=lambda x: int(x[1:]),
+                        )
+                        mass_numbers = [iso[1:] for iso in sorted_iso]
+                        mass_str = f"#M{','.join(mass_numbers)}"
+                    else:
+                        sorted_iso = sorted(isospecies_set)
+                        mass_str = f":{','.join(sorted_iso)}"
                 else:
                     mass_str = ""
 
-                # Build full expression: Specie[atoms]#M0,1,2,...
                 expression = f"{specie}{atom_str}{mass_str}"
 
                 groups[group_id] = Group(
@@ -658,6 +708,68 @@ class MTFParser:
 
         return (FluxMeasurement(net_fluxes=net_fluxes), data)
 
+    def _parse_mmet(
+        self, base_path: Path
+    ) -> Tuple[Optional[MetaboliteSizeMeasurement], Optional[List[Datum]]]:
+        """
+        Parse .mmet file containing metabolite concentration measurements.
+
+        Format (TSV): Id\\tComment\\tSpecie\\tValue\\tSD
+        """
+        mmet_path = base_path.with_suffix(".mmet")
+        if not mmet_path.exists():
+            return None, None
+
+        metabolite_sizes: List[MetaboliteSize] = []
+        data: List[Datum] = []
+
+        try:
+            df = pd.read_csv(
+                mmet_path,
+                sep="\t",
+                comment="#",
+                header=0,
+            )
+
+            for _, row in df.iterrows():
+                specie = str(row.get("Specie", "")).strip()
+                value = row.get("Value")
+                sd = row.get("SD", 0.01)
+
+                if not specie or pd.isna(specie):
+                    continue
+
+                met_size_id = f"ps_{specie}"
+                sd_value = float(sd) if not pd.isna(sd) else 0.01
+
+                met_size = MetaboliteSize(
+                    id=met_size_id,
+                    expression=TextualOrMath(textual=specie),
+                    errormodel=ErrorModel(
+                        expression=TextualOrMath(textual=str(sd_value))
+                    ),
+                )
+                metabolite_sizes.append(met_size)
+
+                if not pd.isna(value):
+                    datum = Datum(
+                        id=met_size_id,
+                        value=float(value),
+                        stddev=sd_value,
+                    )
+                    data.append(datum)
+
+        except Exception as e:
+            raise ValueError(f"Error parsing mmet file {mmet_path}: {e}")
+
+        if not metabolite_sizes:
+            return None, None
+
+        return (
+            MetaboliteSizeMeasurement(metabolite_sizes=metabolite_sizes),
+            data,
+        )
+
     def _parse_variables(self, base_path: Path) -> Optional[Simulation]:
         """
         Parse .tvar file containing variable types and starting values.
@@ -671,6 +783,7 @@ class MTFParser:
             return None
 
         flux_values: List[FluxValue] = []
+        metab_values: List[MetaboliteSizeValue] = []
 
         try:
             df = pd.read_csv(
@@ -690,7 +803,36 @@ class MTFParser:
                 if not name or pd.isna(name):
                     continue
 
-                # Only process NET fluxes for now
+                if kind == "METAB":
+                    if var_type == "C" and not pd.isna(value):
+                        metab_values.append(
+                            MetaboliteSizeValue(
+                                metabolite=name,
+                                lo=float(value),
+                                hi=float(value),
+                                value=float(value),
+                                type="C",
+                            )
+                        )
+                    elif var_type == "F" and not pd.isna(value):
+                        metab_values.append(
+                            MetaboliteSizeValue(
+                                metabolite=name,
+                                lo=0.0,
+                                hi=1e6,
+                                value=float(value),
+                                type="F",
+                            )
+                        )
+                    elif var_type == "D":
+                        metab_values.append(
+                            MetaboliteSizeValue(
+                                metabolite=name,
+                                type="D",
+                            )
+                        )
+                    continue
+
                 if kind != "NET":
                     continue
 
@@ -728,11 +870,14 @@ class MTFParser:
         except Exception as e:
             raise ValueError(f"Error parsing tvar file {tvar_path}: {e}")
 
-        if not flux_values:
+        if not flux_values and not metab_values:
             return None
 
         return Simulation(
-            variables=Variables(flux_values=flux_values),
+            variables=Variables(
+                flux_values=flux_values,
+                metabolitesize_values=metab_values,
+            ),
         )
 
 
