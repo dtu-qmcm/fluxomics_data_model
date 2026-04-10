@@ -14,7 +14,7 @@ Each model consists of multiple files with a shared basename:
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 import pandas as pd
 
@@ -22,7 +22,7 @@ from ..core.core import FluxomicsDataModel, Metadata, Model, Experiments
 from ..core.common import DictList, TextualOrMath, ErrorModel
 from ..model.metabolite import Metabolite
 from ..model.reaction import Reaction
-from ..model.atom_mapping import AtomMapping, AtomMap
+from ..model.atom_mapping import AtomMapping
 from ..model.constraint import (
     Constraints,
     NetConstraints,
@@ -40,7 +40,6 @@ from ..experiment.measurement import (
     MetaboliteSize,
     Group,
     NetFlux,
-    ExchangeFlux,
     Datum,
 )
 from ..output.simulation import (
@@ -78,7 +77,8 @@ class MTFParser:
         Parse MTF files and return a FluxomicsDataModel.
 
         Args:
-            base_path: Path to base filename (without extension) or any MTF file.
+            base_path: Path to base filename (without extension) or
+                any MTF file.
                        For example: "model/e_coli" or "model/e_coli.netw"
 
         Returns:
@@ -141,7 +141,8 @@ class MTFParser:
         """
         Parse .netw file containing reaction network with atom mappings.
 
-        Format: reaction_id:\\tsubstrate (ATOMS) + substrate (atoms) -> product (ATOMS)
+        Format: reaction_id:\\tsubstrate (ATOMS) + substrate (atoms) ->
+        product (ATOMS)
         - -> for irreversible reactions
         - <-> for reversible reactions
         - Atom mappings in parentheses using letter notation
@@ -182,7 +183,8 @@ class MTFParser:
             <->> : reversible but net flux must be non-negative
         """
         # Match reaction format: id:\tsubstrates -> products
-        # Order matters: match longer patterns first (<->>, ->>) before shorter (<->, ->)
+        # Order matters: match longer patterns first (<->>, ->>)
+        # before shorter (<->, ->)
         match = re.match(r"^(\S+):\s*(.+?)\s*(<->>|<->|->>|->)\s*(.+)$", line)
         if not match:
             return None
@@ -247,7 +249,8 @@ class MTFParser:
         for part in parts:
             part = part.strip()
 
-            # Match compound with optional atom mapping: "Compound(atoms)" or "Compound (atoms)"
+            # Match compound with optional atom mapping:
+            # "Compound(atoms)" or "Compound (atoms)"
             match = re.match(r"^(\S+?)(?:\s*\(([^)]+)\))?$", part)
             if match:
                 cpd_id = match.group(1)
@@ -389,7 +392,8 @@ class MTFParser:
         tracers_dict: Dict[str, List[LabelComposition]] = defaultdict(list)
 
         try:
-            # Force Isotopomer to be read as string to preserve leading zeros (e.g., "000000")
+            # Force Isotopomer to be read as string to preserve
+            # leading zeros (e.g., "000000")
             df = pd.read_csv(
                 linp_path,
                 sep="\t",
@@ -479,11 +483,13 @@ class MTFParser:
         """
         Parse .miso file containing MS isotopomer measurements.
 
-        Format (TSV): Id\\tComment\\tSpecie\\tFragment\\tDataset\\tIsospecies\\tValue\\tSD\\tTime
+        Format (TSV):
+        Id\\tComment\\tSpecie\\tFragment\\tDataset\\tIsospecies\\tValue\\tSD\\tTime
         - Fragment: Comma-separated atom positions (e.g., "1,2,3,4")
         - Isospecies: Mass isotopomer label (M0, M1, M2, ...)
 
-        Output FluxML format: <group id="MS-1"><textual>Suc[1-4]#M0,1,2,3,4</textual></group>
+        Output FluxML format: <group id="MS-1"><textual>
+        Suc[1-4]#M0,1,2,3,4</textual></group>
         """
         miso_path = base_path.with_suffix(".miso")
         if not miso_path.exists():
@@ -601,7 +607,9 @@ class MTFParser:
                                         f"[{positions[0]}-{positions[-1]}]"
                                     )
                                 else:
-                                    atom_str = f"[{','.join(str(p) for p in positions)}]"
+                                    atom_str = f"[{
+                                        (','.join(str(p) for p in positions))
+                                    }]"
                             else:
                                 atom_str = (
                                     f"[{','.join(str(p) for p in positions)}]"
@@ -680,7 +688,8 @@ class MTFParser:
 
                 # Create net flux measurement
                 # ErrorModel uses an expression to define the error
-                # For absolute error with SD, use the SD value as the error expression
+                # For absolute error with SD, use the SD value as the
+                # error expression
                 sd_value = float(sd) if not pd.isna(sd) else 0.01
                 net_flux = NetFlux(
                     id=flux_id,

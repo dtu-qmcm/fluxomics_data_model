@@ -2,10 +2,9 @@
 FluxML constraint definitions.
 """
 
-from typing import Optional, List, Union, Tuple, Any
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Optional, List, Tuple, Any
+from pydantic import BaseModel, Field, ConfigDict
 import sympy as sp
-from ..core.common import TextualOrMath
 
 
 class ConstraintFormula(BaseModel):
@@ -20,21 +19,22 @@ class ConstraintFormula(BaseModel):
         - Named: "ratio: uptUGlyc = 0.12*uptGLYC"
 
     Constraints can reference:
-        - Reaction IDs (net or exchange fluxes): Variables representing flux through reactions
-        - Metabolite IDs (pool sizes): Variables representing metabolite concentrations
+        - Reaction IDs (net or exchange fluxes): Variables
+          representing flux through reactions
+        - Metabolite IDs (pool sizes): Variables representing
+          metabolite concentrations
         - Parameters: Named constants (e.g., 'mu' for growth rate)
     """
 
     name: Optional[str] = Field(
         default=None,
-        description="Optional name for the constraint (for named constraints)"
+        description="Optional name for the constraint (for named constraints)",
     )
     expression: str = Field(
         description="Constraint expression (textual formula or MathML)"
     )
     is_mathml: bool = Field(
-        default=False,
-        description="Whether the expression is in MathML format"
+        default=False, description="Whether the expression is in MathML format"
     )
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -58,7 +58,7 @@ class ConstraintFormula(BaseModel):
 
         # Detect operator
         operator = None
-        for op in ['>=', '<=', '=']:
+        for op in [">=", "<=", "="]:
             if op in expr:
                 operator = op
                 lhs_str, rhs_str = expr.split(op, 1)
@@ -114,8 +114,7 @@ class NetConstraints(BaseModel):
     """
 
     formulas: List[ConstraintFormula] = Field(
-        default_factory=list,
-        description="List of net flux constraint formulas"
+        default_factory=list, description="List of net flux constraint formulas"
     )
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -128,9 +127,15 @@ class NetConstraints(BaseModel):
         lines = [f"Net Constraints ({len(self.formulas)} formulas):"]
 
         # Count constraint types
-        equalities = sum(1 for f in self.formulas if '=' in f.expression and '>=' not in f.expression and '<=' not in f.expression)
-        inequalities_gte = sum(1 for f in self.formulas if '>=' in f.expression)
-        inequalities_lte = sum(1 for f in self.formulas if '<=' in f.expression)
+        equalities = sum(
+            1
+            for f in self.formulas
+            if "=" in f.expression
+            and ">=" not in f.expression
+            and "<=" not in f.expression
+        )
+        inequalities_gte = sum(1 for f in self.formulas if ">=" in f.expression)
+        inequalities_lte = sum(1 for f in self.formulas if "<=" in f.expression)
 
         lines.append(f"  Equalities (=): {equalities}")
         lines.append(f"  Lower bounds (>=): {inequalities_gte}")
@@ -163,7 +168,7 @@ class ExchangeConstraints(BaseModel):
 
     formulas: List[ConstraintFormula] = Field(
         default_factory=list,
-        description="List of exchange flux constraint formulas"
+        description="List of exchange flux constraint formulas",
     )
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -176,9 +181,15 @@ class ExchangeConstraints(BaseModel):
         lines = [f"Exchange Constraints ({len(self.formulas)} formulas):"]
 
         # Count constraint types
-        equalities = sum(1 for f in self.formulas if '=' in f.expression and '>=' not in f.expression and '<=' not in f.expression)
-        inequalities_gte = sum(1 for f in self.formulas if '>=' in f.expression)
-        inequalities_lte = sum(1 for f in self.formulas if '<=' in f.expression)
+        equalities = sum(
+            1
+            for f in self.formulas
+            if "=" in f.expression
+            and ">=" not in f.expression
+            and "<=" not in f.expression
+        )
+        inequalities_gte = sum(1 for f in self.formulas if ">=" in f.expression)
+        inequalities_lte = sum(1 for f in self.formulas if "<=" in f.expression)
 
         lines.append(f"  Equalities (=): {equalities}")
         lines.append(f"  Lower bounds (>=): {inequalities_gte}")
@@ -202,7 +213,8 @@ class MetaboliteSizeConstraints(BaseModel):
     """
     FluxML metabolite size constraints.
 
-    Metabolite size constraints apply to pool sizes (concentrations) of metabolites.
+    Metabolite size constraints apply to pool sizes (concentrations)
+    of metabolites.
     Unlike flux constraints which apply to reactions, these constrain the amount
     of metabolite present in the system.
 
@@ -211,7 +223,7 @@ class MetaboliteSizeConstraints(BaseModel):
 
     formulas: List[ConstraintFormula] = Field(
         default_factory=list,
-        description="List of metabolite size constraint formulas"
+        description="List of metabolite size constraint formulas",
     )
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -221,12 +233,20 @@ class MetaboliteSizeConstraints(BaseModel):
         if not self.formulas:
             return "No metabolite size constraints"
 
-        lines = [f"Metabolite Size Constraints ({len(self.formulas)} formulas):"]
+        lines = [
+            f"Metabolite Size Constraints ({len(self.formulas)} formulas):"
+        ]
 
         # Count constraint types
-        equalities = sum(1 for f in self.formulas if '=' in f.expression and '>=' not in f.expression and '<=' not in f.expression)
-        inequalities_gte = sum(1 for f in self.formulas if '>=' in f.expression)
-        inequalities_lte = sum(1 for f in self.formulas if '<=' in f.expression)
+        equalities = sum(
+            1
+            for f in self.formulas
+            if "=" in f.expression
+            and ">=" not in f.expression
+            and "<=" not in f.expression
+        )
+        inequalities_gte = sum(1 for f in self.formulas if ">=" in f.expression)
+        inequalities_lte = sum(1 for f in self.formulas if "<=" in f.expression)
 
         lines.append(f"  Equalities (=): {equalities}")
         lines.append(f"  Lower bounds (>=): {inequalities_gte}")
@@ -296,11 +316,13 @@ class Constraints(BaseModel):
             return "No constraints defined"
 
         # Add overall statistics at the top
-        total_formulas = sum([
-            len(self.net.formulas) if self.net else 0,
-            len(self.xch.formulas) if self.xch else 0,
-            len(self.metabolitesize.formulas) if self.metabolitesize else 0
-        ])
+        total_formulas = sum(
+            [
+                len(self.net.formulas) if self.net else 0,
+                len(self.xch.formulas) if self.xch else 0,
+                len(self.metabolitesize.formulas) if self.metabolitesize else 0,
+            ]
+        )
 
         header = f"=== Constraints ===\n  Total formulas: {total_formulas}\n\n"
         return header + "\n\n".join(sections)

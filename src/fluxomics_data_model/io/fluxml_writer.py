@@ -1,18 +1,18 @@
 """
 FluxML XML writer for writing FluxML files.
 
-FluxML is an XML-based format used by 13CFlux/13CFlux2 for 13C metabolic flux analysis.
+FluxML is an XML-based format used by 13CFlux/13CFlux2 for 13C metabolic
+flux analysis.
 """
 
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, Dict
 from datetime import datetime
 from pathlib import Path
-from collections import defaultdict
 
 from ..core.core import FluxomicsDataModel, Experiments
-from ..model.atom_mapping import AtomMapping, AtomAddress
+from ..model.atom_mapping import AtomMapping
 
 
 class FluxMLWriter:
@@ -107,7 +107,8 @@ class FluxMLWriter:
         # Register namespace - use empty prefix for default namespace
         ET.register_namespace("", self.NAMESPACE)
 
-        # Create root element with namespace (don't use xmlns attribute separately)
+        # Create root element with namespace (don't use xmlns
+        # attribute separately)
         root = ET.Element("fluxml")
         root.set("xmlns", self.NAMESPACE)
 
@@ -156,7 +157,8 @@ class FluxMLWriter:
         """Add reactionnetwork element."""
         rn = ET.SubElement(root, "reactionnetwork")
 
-        # Compute atom counts from atom mappings for metabolites missing this info
+        # Compute atom counts from atom mappings for metabolites
+        # missing this info
         self._metabolite_atom_counts = self._compute_metabolite_atom_counts()
 
         # Add metabolite pools
@@ -165,7 +167,8 @@ class FluxMLWriter:
             pool = ET.SubElement(pools, "pool")
             pool.set("id", metabolite.id)
 
-            # Use metabolite.atoms if available, otherwise infer from atom mappings
+            # Use metabolite.atoms if available, otherwise infer from
+            # atom mappings
             atom_count = metabolite.atoms
             if not atom_count:
                 atom_count = self._metabolite_atom_counts.get(metabolite.id)
@@ -254,11 +257,11 @@ class FluxMLWriter:
         if not atom_mapping.maps:
             return None
 
-        # Get the first atom map (for reactants, all variants should have same reactant atoms)
+        # Get the first atom map (for reactants, all variants should
+        # have same reactant atoms)
         atom_map = next(iter(atom_mapping.maps.values()))
 
         # Find all atoms that come from this reactant
-        atoms = []
         instance = 1  # Track instance (for repeated compounds)
 
         # Count how many times this compound appears before this position
@@ -519,7 +522,7 @@ class FluxMLWriter:
                     weight = datum.id.split("M")[-1]
                     try:
                         datum_elem.set("weight", weight)
-                    except:
+                    except (ValueError, TypeError):
                         pass
                 datum_elem.text = str(datum.value)
 

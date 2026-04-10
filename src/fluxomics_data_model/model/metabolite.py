@@ -161,7 +161,8 @@ class Metabolite(BaseModel):
     )
     involved_in_variants: bool = Field(
         default=False,
-        description="Flag indicating if this metabolite participates in variant reactions"
+        description="Flag indicating if this metabolite participates "
+        "in variant reactions",
     )
 
     # JAX-compatible numerical representation

@@ -12,12 +12,13 @@ class Reaction(BaseModel):
     """
     Represents a biochemical reaction in the metabolic network.
 
-    A reaction describes the transformation of reactants to products. Reactions can
-    have multiple atom mapping variants when symmetric compounds create ambiguity
-    in carbon atom transitions.
+    A reaction describes the transformation of reactants to products.
+    Reactions can have multiple atom mapping variants when symmetric
+    compounds create ambiguity in carbon atom transitions.
 
     Attributes:
-        id: Base reaction identifier (e.g., "SCS" for variants "SCS___1", "SCS___2")
+        id: Base reaction identifier (e.g., "SCS" for variants
+            "SCS___1", "SCS___2")
         name: Optional human-readable name
         reversibility: Whether the reaction can proceed in both directions
         annotations: Additional metadata annotations
@@ -54,7 +55,8 @@ class Reaction(BaseModel):
     )
     atom_mapping_ids: Optional[List[str]] = Field(
         default=None,
-        description="Computational flux variable IDs for variants (e.g., ['SCS___1', 'SCS___2'])"
+        description="Computational flux variable IDs for variants "
+        "(e.g., ['SCS___1', 'SCS___2'])",
     )
 
     # JAX-compatible numerical representation
@@ -84,7 +86,9 @@ class Reaction(BaseModel):
     @property
     def is_variant_reaction(self) -> bool:
         """Check if this reaction has multiple atom map variants."""
-        return self.atom_mapping_ids is not None and len(self.atom_mapping_ids) > 1
+        return (
+            self.atom_mapping_ids is not None and len(self.atom_mapping_ids) > 1
+        )
 
     @property
     def n_variants(self) -> int:

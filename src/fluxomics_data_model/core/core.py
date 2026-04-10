@@ -155,6 +155,7 @@ class Model(BaseModel):
 
         return jnp.stack(matrix, axis=1)
 
+
 class Experiments(BaseModel):
     """
     FluxML experimental setup.
@@ -223,6 +224,7 @@ class Experiments(BaseModel):
         ]
 
         return jnp.stack(padded)
+
 
 class FluxomicsDataModel(BaseModel):
     """

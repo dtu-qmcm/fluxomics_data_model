@@ -15,7 +15,7 @@ Supports .tsv, .csv, and .xlsx file formats.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 import pandas as pd
 
@@ -24,7 +24,6 @@ from ..core.common import DictList, TextualOrMath, ErrorModel
 from ..model.metabolite import Metabolite
 from ..model.reaction import Reaction
 from ..model.atom_mapping import AtomMapping
-from ..experiment.tracer import Tracers
 from ..experiment.measurement import (
     Measurement,
     MeasurementModel,
@@ -185,7 +184,8 @@ class FreefluxParser:
 
         Format:
         - #reaction_ID: Reaction identifier (section headers start with #)
-        - substrate_IDs(atom) or reactant_IDs(atom): Substrates with atom mapping
+        - substrate_IDs(atom) or reactant_IDs(atom): Substrates with
+          atom mapping
         - product_IDs(atom): Products with atom mapping
         - reversibility: 0 (irreversible) or 1 (reversible)
         """
@@ -267,7 +267,8 @@ class FreefluxParser:
             )
             self._reactions[rxn_id] = reaction
 
-            # Create atom mapping if atoms are specified (skip if there's an error)
+            # Create atom mapping if atoms are specified (skip if
+            # there's an error)
             if reactant_atoms and product_atoms:
                 try:
                     atom_mapping = self._create_atom_mapping(
@@ -279,7 +280,7 @@ class FreefluxParser:
                     )
                     if atom_mapping:
                         self._atom_mappings[rxn_id] = atom_mapping
-                except (ValueError, KeyError) as e:
+                except (ValueError, KeyError):
                     # Skip reactions with invalid atom mappings
                     pass
 
@@ -290,7 +291,8 @@ class FreefluxParser:
         Parse compounds string with optional atom mappings.
 
         Args:
-            compounds_str: String like "G6P(abcdef)+AcCoA(gh)" or "G6P(abcdef) + AcCoA(gh)"
+            compounds_str: String like "G6P(abcdef)+AcCoA(gh)" or
+                "G6P(abcdef) + AcCoA(gh)"
 
         Returns:
             Tuple of (compound_ids, [(compound_id, atoms), ...])
@@ -306,15 +308,17 @@ class FreefluxParser:
             if not part:
                 continue
 
-            # Match compound with optional atom mapping: "Compound(atoms)" or "123Compound(atoms)"
+            # Match compound with optional atom mapping:
+            # "Compound(atoms)" or "123Compound(atoms)"
             # Also handles stoichiometry like "2NADPH" or "0.5O2"
             match = re.match(r"^([\d.]*)?(\S+?)(?:\(([^)]+)\))?$", part)
             if match:
-                stoich = match.group(1) or ""
+                match.group(1) or ""
                 cpd_id = match.group(2)
                 atoms = match.group(3) or ""
 
-                # Handle symmetric compounds with comma-separated atoms like "abcd,dcba"
+                # Handle symmetric compounds with comma-separated
+                # atoms like "abcd,dcba"
                 # Just use the first variant for the compound id
                 atoms_clean = atoms.split(",")[0] if atoms else ""
 
@@ -451,7 +455,8 @@ class FreefluxParser:
         Parse fluxes file containing flux values.
 
         Format:
-        - #flux_ID: Flux identifier (e.g., "v1" or "v1_f", "v1_b" for reversible)
+        - #flux_ID: Flux identifier (e.g., "v1" or "v1_f", "v1_b" for
+          reversible)
         - value: Flux value
         """
         filepath = self._find_file(base_path, "fluxes")
@@ -477,15 +482,15 @@ class FreefluxParser:
             if not flux_id or pd.isna(value):
                 continue
 
-            # Determine flux type from ID suffix (_f for forward, _b for backward)
+            # Determine flux type from ID suffix (_f for forward,
+            # _b for backward)
             flux_type = "net"
-            base_id = flux_id
             if flux_id.endswith("_f"):
                 flux_type = "net"  # forward flux
-                base_id = flux_id[:-2]
+                flux_id[:-2]
             elif flux_id.endswith("_b"):
                 flux_type = "xch"  # backward as exchange
-                base_id = flux_id[:-2]
+                flux_id[:-2]
 
             flux_value = FluxValue(
                 flux=flux_id,
@@ -542,7 +547,8 @@ class FreefluxParser:
         return metabolitesize_values if metabolitesize_values else None
 
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
-        """Parse measurement files (measured_MDVs, measured_fluxes, measured_inst_MDVs)."""
+        """Parse measurement files (measured_MDVs, measured_fluxes,
+        measured_inst_MDVs)."""
         # Parse steady-state MDV measurements
         labeling_measurement, labeling_data = self._parse_measured_mdvs(
             base_path
@@ -591,7 +597,8 @@ class FreefluxParser:
         Parse measured_MDVs file containing steady-state MDV measurements.
 
         Format:
-        - #fragment_ID: Fragment identifier like "Glu_12345" (metabolite_positions)
+        - #fragment_ID: Fragment identifier like "Glu_12345"
+          (metabolite_positions)
         - mean: Comma-separated MDV values
         - sd: Comma-separated standard deviations
         """

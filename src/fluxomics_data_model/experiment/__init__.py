@@ -16,7 +16,12 @@ from .measurement import (
     MetaboliteSizeMeasurement,
     MetaboliteSize,
 )
-from ..output.simulation import Simulation, Variables, FluxValue, MetaboliteSizeValue
+from ..output.simulation import (
+    Simulation,
+    Variables,
+    FluxValue,
+    MetaboliteSizeValue,
+)
 
 __all__ = [
     "Tracers",

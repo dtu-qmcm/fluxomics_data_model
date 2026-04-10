@@ -9,8 +9,6 @@ from datetime import datetime
 import re
 from itertools import product
 
-logger = logging.getLogger(__name__)
-
 from ..model import (
     FluxomicsDataModel,
     Metadata,
@@ -45,6 +43,8 @@ from ..model import (
     ErrorModel,
     DictList,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class FluxMLParser:
@@ -291,7 +291,8 @@ class FluxMLParser:
                 if cfg:
                     product_cfgs.append((rproduct_id, cfg))
 
-        # Also collect reactant variants (some FluxML files put variants on reduct)
+        # Also collect reactant variants (some FluxML files put
+        # variants on reduct)
         reactant_variants: Dict[str, List[Tuple[str, Optional[float]]]] = {}
         for reduct_elem in reaction_elem.findall(f"{ns_prefix}reduct"):
             reduct_id = reduct_elem.get("id")
@@ -560,8 +561,10 @@ class FluxMLParser:
                 name = None
                 if ":" in line:
                     parts = line.split(":", 1)
-                    # Check if this is actually a constraint name (not part of formula)
-                    # Named constraints have format "name: formula" where name doesn't contain operators
+                    # Check if this is actually a constraint name
+                    # (not part of formula)
+                    # Named constraints have format "name: formula"
+                    # where name doesn't contain operators
                     potential_name = parts[0].strip()
                     if not any(
                         op in potential_name
@@ -970,7 +973,8 @@ class FluxMLParser:
         pos_str = datum_elem.get("pos")
         pos = int(pos_str) if pos_str else None
 
-        # FluxML uses "weight" to denote the mass isotopomer position (M0, M1, ...)
+        # FluxML uses "weight" to denote the mass isotopomer position
+        # (M0, M1, ...)
         # Map it to pos when pos is not explicitly set
         if pos is None and weight is not None:
             try:

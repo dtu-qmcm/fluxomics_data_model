@@ -89,7 +89,8 @@ class MTFWriter:
         """
         Write .netw file containing reaction network with atom mappings.
 
-        Format: reaction_id: substrate (ATOMS) + substrate (atoms) -> product (ATOMS)
+        Format: reaction_id: substrate (ATOMS) + substrate (atoms) ->
+        product (ATOMS)
         """
         lines = []
         lines.append("# Network definition")
@@ -274,7 +275,8 @@ class MTFWriter:
         """
         Write .miso file containing MS isotopomer measurements.
 
-        Format (TSV): Id\tComment\tSpecie\tFragment\tDataset\tIsospecies\tValue\tSD\tTime
+        Format (TSV):
+        Id\tComment\tSpecie\tFragment\tDataset\tIsospecies\tValue\tSD\tTime
         """
         lines = []
         lines.append(
@@ -294,7 +296,7 @@ class MTFWriter:
             )
 
             # Build a lookup from datum id to datum
-            datum_lookup = {d.id: d for d in data}
+            {d.id: d for d in data}
 
             for group in labeling.groups:
                 # Parse group expression to get metabolite and fragment
@@ -309,7 +311,8 @@ class MTFWriter:
                 # Group ID format varies, so we search for matching data
                 for datum in data:
                     if datum.id.startswith(group.id):
-                        # Extract isospecies from datum id (e.g., "group:M0" -> "M0")
+                        # Extract isospecies from datum id
+                        # (e.g., "group:M0" -> "M0")
                         parts = datum.id.split(":")
                         isospecies = parts[-1] if len(parts) > 1 else ""
 

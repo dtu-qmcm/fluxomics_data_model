@@ -21,14 +21,16 @@ class ConstraintEvaluator:
     def __init__(
         self,
         reaction_ids: List[str],
-        parameters: Optional[Dict[str, float]] = None
+        parameters: Optional[Dict[str, float]] = None,
     ):
         """
         Initialize constraint evaluator.
 
         Args:
-            reaction_ids: List of reaction IDs (order determines flux vector indexing)
-            parameters: Dictionary of parameter names and values (e.g., {'mu': 0.03})
+            reaction_ids: List of reaction IDs (order determines flux
+                vector indexing)
+            parameters: Dictionary of parameter names and values
+                (e.g., {'mu': 0.03})
         """
         self.reaction_ids = reaction_ids
         self.parameters = parameters or {}
@@ -59,13 +61,15 @@ class ConstraintEvaluator:
 
         Returns:
             Tuple of (constraint_fn, operator, rhs_value) where:
-            - constraint_fn: Function that takes flux vector and returns residual
+            - constraint_fn: Function that takes flux vector and
+              returns residual
             - operator: One of '>=', '<=', '='
             - rhs_value: Right-hand side value after parameter substitution
 
         Example:
             For "bmALA >= 0.75*0.22601*mu" with mu=0.03:
-            - Returns (fn, '>=', 0.005085225) where fn(v) = v[idx_bmALA] - 0.005085225
+            - Returns (fn, '>=', 0.005085225) where fn(v) =
+              v[idx_bmALA] - 0.005085225
             - In optimization: fn(v) >= 0 means bmALA >= 0.005085225
         """
         # Use ConstraintFormula's built-in SymPy parser
@@ -101,9 +105,9 @@ class ConstraintEvaluator:
 
         if len(free_symbols) == 0:
             # Constant constraint (e.g., "1 >= 0")
-            if operator == '>=':
+            if operator == ">=":
                 residual = float(lhs_expr) - rhs_value
-            elif operator == '<=':
+            elif operator == "<=":
                 residual = rhs_value - float(lhs_expr)
             else:  # '='
                 residual = float(lhs_expr) - rhs_value
@@ -122,10 +126,10 @@ class ConstraintEvaluator:
                 symbol_order.append(sym)
 
         # Convert to JAX function using lambdify
-        if operator == '>=':
+        if operator == ">=":
             # lhs >= rhs → lhs - rhs >= 0
             residual_expr = lhs_expr - rhs_value
-        elif operator == '<=':
+        elif operator == "<=":
             # lhs <= rhs → rhs - lhs >= 0
             residual_expr = rhs_value - lhs_expr
         else:  # '='
@@ -133,12 +137,14 @@ class ConstraintEvaluator:
             residual_expr = lhs_expr - rhs_value
 
         # Create JAX function
-        jax_fn = sp.lambdify(symbol_order, residual_expr, modules='jax')
+        jax_fn = sp.lambdify(symbol_order, residual_expr, modules="jax")
 
         # Wrapper to extract relevant fluxes from flux vector
         def constraint_fn(flux_vector: Array) -> Array:
             # Extract flux values for symbols in the expression
-            flux_values = [flux_vector[self.flux_map[str(sym)]] for sym in symbol_order]
+            flux_values = [
+                flux_vector[self.flux_map[str(sym)]] for sym in symbol_order
+            ]
             return jax_fn(*flux_values) if flux_values else jax_fn()
 
         return constraint_fn, operator, rhs_value
@@ -162,9 +168,7 @@ class ConstraintEvaluator:
         return results
 
     def evaluate_constraints(
-        self,
-        flux_vector: Array,
-        formulas: List[ConstraintFormula]
+        self, flux_vector: Array, formulas: List[ConstraintFormula]
     ) -> Dict[str, float]:
         """
         Evaluate all constraints for a given flux vector.
@@ -181,7 +185,7 @@ class ConstraintEvaluator:
             constraint_fn, operator, rhs_value = self.parse_formula(formula)
             residual = float(constraint_fn(flux_vector))
 
-            name = formula.name or f"constraint_{i+1}"
+            name = formula.name or f"constraint_{i + 1}"
             results[f"{name} ({formula.expression})"] = residual
 
         return results

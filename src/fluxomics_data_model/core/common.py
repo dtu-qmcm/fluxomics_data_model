@@ -149,7 +149,7 @@ class AtomMappingsDict(dict):
         # Count mappings with variants
         with_variants = 0
         for am in self.values():
-            if hasattr(am, 'maps') and len(am.maps) > 1:
+            if hasattr(am, "maps") and len(am.maps) > 1:
                 with_variants += 1
 
         if with_variants > 0:
@@ -160,7 +160,7 @@ class AtomMappingsDict(dict):
         lines.append("")
         lines.append("  Sample atom mappings:")
         for rxn_id, am in list(self.items())[:sample_size]:
-            if hasattr(am, 'maps'):
+            if hasattr(am, "maps"):
                 n_maps = len(am.maps)
                 if n_maps > 1:
                     lines.append(f"    - {rxn_id}: {n_maps} variants")
@@ -190,7 +190,8 @@ class AtomMappingsDict(dict):
         # Get the schema for a dict
         dict_schema = handler.generate_schema(dict)
 
-        # Return a schema that validates as a dict but returns an AtomMappingsDict
+        # Return a schema that validates as a dict but returns an
+        # AtomMappingsDict
         return core_schema.no_info_after_validator_function(
             lambda v: cls(v),
             dict_schema,
@@ -440,14 +441,16 @@ class DictList(list, Generic[T]):
             if m.formula:
                 with_formula += 1
             # Check for InChI in annotations
-            if hasattr(m, 'annotations') and m.annotations:
+            if hasattr(m, "annotations") and m.annotations:
                 for ann in m.annotations:
-                    if ann.name and ann.name.lower() in ('inchi', 'inchikey'):
+                    if ann.name and ann.name.lower() in ("inchi", "inchikey"):
                         with_inchi += 1
                         break
 
         # Show compartment distribution
-        if len(compartments) > 1 or (len(compartments) == 1 and "unspecified" not in compartments):
+        if len(compartments) > 1 or (
+            len(compartments) == 1 and "unspecified" not in compartments
+        ):
             lines.append("  By compartment:")
             for comp, count in sorted(compartments.items()):
                 lines.append(f"    {comp}: {count}")
@@ -482,19 +485,26 @@ class DictList(list, Generic[T]):
         reversible = sum(1 for r in self if r.reversibility)
         irreversible = len(self) - reversible
         variant_reactions = sum(1 for r in self if r.is_variant_reaction)
-        total_variants = sum(r.n_variants for r in self if r.is_variant_reaction)
+        total_variants = sum(
+            r.n_variants for r in self if r.is_variant_reaction
+        )
 
         lines.append(f"  Reversible: {reversible}")
         lines.append(f"  Irreversible: {irreversible}")
         if variant_reactions > 0:
-            lines.append(f"  With atom mapping variants: {variant_reactions} ({total_variants} total variants)")
+            lines.append(
+                f"  With atom mapping variants: {variant_reactions} "
+                f"({total_variants} total variants)"
+            )
 
         # Sample reactions
         sample_size = min(5, len(self))
         lines.append("")
         lines.append("  Sample reactions:")
         for r in list(self)[:sample_size]:
-            variant_str = f" [{r.n_variants} variants]" if r.is_variant_reaction else ""
+            variant_str = (
+                f" [{r.n_variants} variants]" if r.is_variant_reaction else ""
+            )
             lines.append(f"    - {r.id}: {r.equation}{variant_str}")
 
         if len(self) > sample_size:

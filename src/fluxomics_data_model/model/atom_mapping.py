@@ -94,14 +94,17 @@ class AtomMapping(BaseModel):
         description="Reaction identifier this mapping belongs to"
     )
     reactants: List[str] = Field(
-        description="Ordered list of reactant IDs (needed for atom-level operations)"
+        description="Ordered list of reactant IDs (needed for "
+        "atom-level operations)"
     )
     products: List[str] = Field(
-        description="Ordered list of product IDs (needed for atom-level operations)"
+        description="Ordered list of product IDs (needed for "
+        "atom-level operations)"
     )
     maps: Dict[str, AtomMap] = Field(
         default_factory=dict,
-        description="Atom map variants keyed by atom_map_id (e.g., 'SCS___1' -> map)",
+        description="Atom map variants keyed by atom_map_id "
+        "(e.g., 'SCS___1' -> map)",
     )
     weights: Optional[Dict[str, float]] = Field(
         default=None,
@@ -118,7 +121,8 @@ class AtomMapping(BaseModel):
         """Return a summary of the atom mapping.
 
         Returns:
-            String with information about the number of variants and their weights
+            String with information about the number of variants and
+            their weights
         """
         num_maps = len(self.maps)
 
@@ -127,11 +131,15 @@ class AtomMapping(BaseModel):
 
         if num_maps == 1:
             map_id = next(iter(self.maps.keys()))
-            return f"AtomMapping(reaction_id='{self.reaction_id}', single map: {map_id})"
+            return (
+                f"AtomMapping(reaction_id='{self.reaction_id}', "
+                f"single map: {map_id})"
+            )
 
         # Multiple variants
         lines = [
-            f"AtomMapping(reaction_id='{self.reaction_id}', {num_maps} variants):",
+            f"AtomMapping(reaction_id='{self.reaction_id}', "
+            f"{num_maps} variants):",
         ]
 
         for map_id in sorted(self.maps.keys()):
@@ -217,8 +225,8 @@ class AtomMapping(BaseModel):
         """Convert atom mapping to letter notation string.
 
         Args:
-            atom_map_id: Optional atom map ID to use. If None, shows all variants
-                or uses the single map if only one exists.
+            atom_map_id: Optional atom map ID to use. If None, shows
+                all variants or uses the single map if only one exists.
 
         Returns a string representation of the atom mapping in letter
         notation format. If multiple elements are present, they are shown
@@ -246,13 +254,17 @@ class AtomMapping(BaseModel):
             # For multiple variants, show each on a separate line
             results = []
             for map_id, atom_map in self.maps.items():
-                weight_str = f" [{self.weights[map_id]:.3f}]" if self.weights and map_id in self.weights else ""
+                weight_str = (
+                    f" [{self.weights[map_id]:.3f}]"
+                    if self.weights and map_id in self.weights
+                    else ""
+                )
                 # Create temporary AtomMapping for single map recursion
                 temp_mapping = AtomMapping(
                     reaction_id=self.reaction_id,
                     reactants=self.reactants,
                     products=self.products,
-                    maps={map_id: atom_map}
+                    maps={map_id: atom_map},
                 )
                 result = temp_mapping.to_letter_notation(atom_map_id=map_id)
                 if result:
@@ -282,8 +294,7 @@ class AtomMapping(BaseModel):
 
             # Assign letters sequentially based on reactant order
             letters = (
-                "abcdefghijklmnopqrstuvwxyz"
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
             )
             letter_idx = 0
             atom_to_letter = {}
@@ -401,7 +412,7 @@ class AtomMapping(BaseModel):
 
                 if src_reactant_idx not in position_to_instance:
                     raise IndexError(
-                        f"Reactant index @{src_reactant_idx+1} out of range"
+                        f"Reactant index @{src_reactant_idx + 1} out of range"
                     )
 
                 src_cpd, src_instance = position_to_instance[src_reactant_idx]
@@ -427,8 +438,9 @@ class AtomMapping(BaseModel):
         """Convert to FluxML-style atom mapping string.
 
         Args:
-            atom_map_id: Optional atom map ID to use. If None and only one map exists,
-                uses that map. If multiple maps exist, must specify atom_map_id.
+            atom_map_id: Optional atom map ID to use. If None and only
+                one map exists, uses that map. If multiple maps exist,
+                must specify atom_map_id.
 
         Returns:
             FluxML-style string representation of the mapping
@@ -503,10 +515,13 @@ class AtomMapping(BaseModel):
                         ):
                             src_addr = atom_map.mapping[prod_addr]
                             # Get the reactant position for this source atom
-                            src_pos = reactant_position.get((src_addr.mol, src_addr.instance))
+                            src_pos = reactant_position.get(
+                                (src_addr.mol, src_addr.instance)
+                            )
                             if src_pos is None:
                                 raise ValueError(
-                                    f"Source compound {src_addr.mol} instance {src_addr.instance} "
+                                    f"Source compound {src_addr.mol} "
+                                    f"instance {src_addr.instance} "
                                     f"not found in reactant list"
                                 )
                             atoms.append(
@@ -538,7 +553,8 @@ class AtomMapping(BaseModel):
         """Merge with another mapping to handle symmetric reactions.
 
         Args:
-            other: Another AtomMapping to merge with (must have same reaction_id)
+            other: Another AtomMapping to merge with (must have same
+                reaction_id)
 
         Returns:
             New AtomMapping with combined maps
@@ -572,7 +588,9 @@ class AtomMapping(BaseModel):
                 new_weights[map_id] = w * self_weight
             for map_id, w in other.weights.items():
                 # Use the potentially renamed key
-                actual_key = map_id if map_id not in self.maps else f"{map_id}_alt1"
+                actual_key = (
+                    map_id if map_id not in self.maps else f"{map_id}_alt1"
+                )
                 new_weights[actual_key] = w * other_weight
 
         return AtomMapping(
@@ -580,7 +598,7 @@ class AtomMapping(BaseModel):
             reactants=self.reactants,
             products=self.products,
             maps=new_maps,
-            weights=new_weights
+            weights=new_weights,
         )
 
     def transform_isotopomers(
@@ -599,8 +617,8 @@ class AtomMapping(BaseModel):
                 instances). If None, uses self.reactants.
             product_order: Order of products (with repetitions for multiple
                 instances). If None, uses self.products.
-            atom_map_id: Which mapping variant to use. If None and only one map exists,
-                uses that map.
+            atom_map_id: Which mapping variant to use. If None and only
+                one map exists, uses that map.
 
         Returns:
             Dict of (product_id, instance) -> isotopomer distribution
@@ -661,7 +679,12 @@ class AtomMapping(BaseModel):
                 raise ValueError(f"Product atom {prod_atom} not in mapping")
             src_atom = atom_map.mapping[prod_atom]
             # Convert src_atom back to tuple for lookup
-            src_atom_tuple = (src_atom.mol, src_atom.index, src_atom.element, src_atom.instance)
+            src_atom_tuple = (
+                src_atom.mol,
+                src_atom.index,
+                src_atom.element,
+                src_atom.instance,
+            )
             src_positions.append(src_pos_lookup[src_atom_tuple])
 
         # Build joint reactant distribution
@@ -724,8 +747,10 @@ class AtomMapping(BaseModel):
         Args:
             reactant_distributions: Dict of (compound_id, instance) ->
                 isotopomer distribution
-            reactant_order: Order of reactants (with repetitions). If None, uses self.reactants.
-            product_order: Order of products (with repetitions). If None, uses self.products.
+            reactant_order: Order of reactants (with repetitions). If
+                None, uses self.reactants.
+            product_order: Order of products (with repetitions). If
+                None, uses self.products.
 
         Returns:
             Dict of (product_id, instance) -> isotopomer distribution
@@ -749,7 +774,10 @@ class AtomMapping(BaseModel):
         result: Dict[Tuple[str, int], np.ndarray] = {}
         for map_id, weight in weights.items():
             prod_dists = self.transform_isotopomers(
-                reactant_distributions, reactant_order, product_order, atom_map_id=map_id
+                reactant_distributions,
+                reactant_order,
+                product_order,
+                atom_map_id=map_id,
             )
             for key, dist in prod_dists.items():
                 if key not in result:
