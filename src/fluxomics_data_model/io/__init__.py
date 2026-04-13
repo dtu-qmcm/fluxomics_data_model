@@ -12,6 +12,7 @@ from .fluxml_writer import FluxMLWriter, write_fluxml
 from .mtf_parser import MTFParser, parse_mtf
 from .mtf_writer import MTFWriter, write_mtf
 from .freeflux_parser import FreefluxParser, parse_freeflux
+from .freeflux_writer import FreefluxWriter, write_freeflux
 
 __all__ = [
     # FluxML format
@@ -27,4 +28,6 @@ __all__ = [
     # Freeflux format (tabular)
     "FreefluxParser",
     "parse_freeflux",
+    "FreefluxWriter",
+    "write_freeflux",
 ]

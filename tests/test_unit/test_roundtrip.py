@@ -49,9 +49,10 @@ class TestFluxMLRoundTrip:
         model = parse_fluxml_file(str(FLUXML_BENCHMARK))
         assert model is not None
 
-        # Write to MTF
+        # Write to MTF (use first experiment name)
+        exp_name = model.experiments[0].name if model.experiments else None
         mtf_base = temp_dir / "test_model"
-        write_mtf(model, str(mtf_base))
+        write_mtf(model, str(mtf_base), experiment_name=exp_name)
 
         # Verify MTF files were created
         assert (mtf_base.with_suffix(".netw")).exists()
@@ -70,8 +71,11 @@ class TestFluxMLRoundTrip:
         original_rxn_count = len(original.model.reactions)
 
         # Write to MTF and read back
+        exp_name = (
+            original.experiments[0].name if original.experiments else None
+        )
         mtf_base = temp_dir / "test_model"
-        write_mtf(original, str(mtf_base))
+        write_mtf(original, str(mtf_base), experiment_name=exp_name)
 
         # Parse MTF
         converted = parse_mtf(str(mtf_base))
@@ -155,8 +159,11 @@ class TestFullRoundTrip:
         original = parse_fluxml_file(str(FLUXML_BENCHMARK))
 
         # Convert to MTF
+        exp_name = (
+            original.experiments[0].name if original.experiments else None
+        )
         mtf_base = temp_dir / "intermediate"
-        write_mtf(original, str(mtf_base))
+        write_mtf(original, str(mtf_base), experiment_name=exp_name)
 
         # Read MTF
         intermediate = parse_mtf(str(mtf_base))

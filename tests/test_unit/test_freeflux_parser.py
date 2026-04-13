@@ -10,7 +10,7 @@ from fluxomics_data_model.core.core import FluxomicsDataModel
 
 
 # Path to test data
-TEST_DATA_DIR = Path(__file__).parent.parent.parent / "data" / "freeflux_test"
+TEST_DATA_DIR = Path(__file__).parent.parent.parent / "data" / "freeflux_tests"
 
 
 class TestFreefluxParserToy:
@@ -139,7 +139,9 @@ class TestFreefluxParserSynechocystis:
 
     def test_parse_synechocystis_synthetic(self):
         """Test parsing Synechocystis synthetic data."""
-        model = parse_freeflux(TEST_DATA_DIR / "synechocystis" / "synthetic_data")
+        model = parse_freeflux(
+            TEST_DATA_DIR / "synechocystis" / "synthetic_data"
+        )
 
         assert isinstance(model, FluxomicsDataModel)
 
@@ -148,7 +150,9 @@ class TestFreefluxParserSynechocystis:
 
     def test_synechocystis_inst_mdvs(self):
         """Test that time-course MDVs are parsed."""
-        model = parse_freeflux(TEST_DATA_DIR / "synechocystis" / "synthetic_data")
+        model = parse_freeflux(
+            TEST_DATA_DIR / "synechocystis" / "synthetic_data"
+        )
 
         experiment = model.experiments[0]
 
@@ -229,7 +233,9 @@ class TestFreefluxParserMDVParsing:
         # Check values are in valid range [0, 1] for MDVs
         for datum in mdv_data:
             if datum.value is not None:
-                assert 0 <= datum.value <= 1, f"MDV value {datum.value} out of range"
+                assert 0 <= datum.value <= 1, (
+                    f"MDV value {datum.value} out of range"
+                )
 
     def test_mdv_stddev_parsed(self):
         """Test that MDV standard deviations are parsed."""

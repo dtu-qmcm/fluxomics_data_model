@@ -1017,12 +1017,11 @@ class FluxMLParser:
                 flux_values.append(self._parse_flux_value(flux_elem))
 
             metabolite_values = []
-            for met_elem in variables_elem.findall(
-                f"{ns_prefix}metabolitesizevalue"
-            ):
-                metabolite_values.append(
-                    self._parse_metabolite_size_value(met_elem)
-                )
+            for tag in ("poolsizevalue", "metabolitesizevalue"):
+                for met_elem in variables_elem.findall(f"{ns_prefix}{tag}"):
+                    metabolite_values.append(
+                        self._parse_metabolite_size_value(met_elem)
+                    )
 
             variables = Variables(
                 flux_values=flux_values, metabolitesize_values=metabolite_values
@@ -1068,7 +1067,7 @@ class FluxMLParser:
         else:
             value = 0.0
 
-        return MetaboliteSizeValue(pool=pool, lo=value)
+        return MetaboliteSizeValue(metabolite=pool, lo=value)
 
     def _get_namespace_prefix(self, elem: ET.Element) -> str:
         """Get namespace prefix for element."""

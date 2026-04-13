@@ -166,9 +166,9 @@ class FreefluxParser:
         if suffix == ".xlsx":
             df = pd.read_excel(file_path)
         elif suffix == ".csv":
-            df = pd.read_csv(file_path, comment="#")
+            df = pd.read_csv(file_path)
         else:  # .tsv
-            df = pd.read_csv(file_path, sep="\t", comment="#")
+            df = pd.read_csv(file_path, sep="\t")
 
         # Clean column names - remove leading # and strip whitespace
         df.columns = [
@@ -223,19 +223,21 @@ class FreefluxParser:
             products_str = str(row.get(col_map.get("products", ""), ""))
             rev_value = row.get(col_map.get("reversibility", ""), 0)
 
-            # Skip if no substrates or products
+            # Skip if no substrates
             if (
                 pd.isna(substrates_str)
                 or substrates_str == "nan"
                 or not substrates_str.strip()
             ):
                 continue
+
+            # Handle empty products (sink reactions)
             if (
                 pd.isna(products_str)
                 or products_str == "nan"
                 or not products_str.strip()
             ):
-                continue
+                products_str = ""
 
             # Parse reversibility
             reversible = False
@@ -450,6 +452,17 @@ class FreefluxParser:
             weights=weights_dict,
         )
 
+    def _resolve_flux_id(self, flux_id: str) -> str:
+        """Map a flux ID to the base reaction ID.
+
+        For variant reactions, the base ID (e.g., 'R24') is kept as-is
+        since the data model stores flux values against base reaction IDs.
+        Strips any computational suffixes (e.g., '___1') if present.
+        """
+        if "___" in flux_id:
+            return flux_id.split("___")[0]
+        return flux_id
+
     def _parse_fluxes(self, base_path: Path) -> Optional[List[FluxValue]]:
         """
         Parse fluxes file containing flux values.
@@ -458,6 +471,11 @@ class FreefluxParser:
         - #flux_ID: Flux identifier (e.g., "v1" or "v1_f", "v1_b" for
           reversible)
         - value: Flux value
+
+        Converts FreeFlux forward/backward (_f/_b) convention to
+        13CFlux2 net/xch convention:
+            net = forward - backward
+            xch = min(forward, backward)
         """
         filepath = self._find_file(base_path, "fluxes")
         if not filepath:
@@ -465,16 +483,17 @@ class FreefluxParser:
 
         df = self._read_tabular(filepath)
 
-        # Standardize column names
         col_map = {}
         for col in df.columns:
             col_lower = col.lower()
             if "flux" in col_lower and "id" in col_lower:
                 col_map["flux_id"] = col
-            elif col_lower == "value":
+            elif "value" in col_lower:
                 col_map["value"] = col
 
-        flux_values = []
+        raw_pairs: Dict[str, Dict[str, float]] = defaultdict(dict)
+        irreversible: Dict[str, float] = {}
+
         for _, row in df.iterrows():
             flux_id = str(row.get(col_map.get("flux_id", ""), "")).strip()
             value = row.get(col_map.get("value", ""), None)
@@ -482,24 +501,39 @@ class FreefluxParser:
             if not flux_id or pd.isna(value):
                 continue
 
-            # Determine flux type from ID suffix (_f for forward,
-            # _b for backward)
-            flux_type = "net"
             if flux_id.endswith("_f"):
-                flux_type = "net"  # forward flux
-                flux_id[:-2]
+                base_id = flux_id[:-2]
+                resolved = self._resolve_flux_id(base_id)
+                raw_pairs[resolved]["forward"] = float(value)
             elif flux_id.endswith("_b"):
-                flux_type = "xch"  # backward as exchange
-                flux_id[:-2]
+                base_id = flux_id[:-2]
+                resolved = self._resolve_flux_id(base_id)
+                raw_pairs[resolved]["backward"] = float(value)
+            else:
+                resolved = self._resolve_flux_id(flux_id)
+                irreversible[resolved] = float(value)
 
-            flux_value = FluxValue(
-                flux=flux_id,
-                type=flux_type,
-                lo=float(value),
-                hi=float(value),
-                value=float(value),
+        flux_values = []
+
+        for rxn_id, vals in raw_pairs.items():
+            fwd = vals.get("forward", 0.0)
+            bwd = vals.get("backward", 0.0)
+            net = fwd - bwd
+            xch = min(fwd, bwd)
+
+            flux_values.append(
+                FluxValue(flux=rxn_id, type="net", value=net, lo=net, hi=net)
             )
-            flux_values.append(flux_value)
+            flux_values.append(
+                FluxValue(flux=rxn_id, type="xch", value=xch, lo=xch, hi=xch)
+            )
+
+        for rxn_id, value in irreversible.items():
+            flux_values.append(
+                FluxValue(
+                    flux=rxn_id, type="net", value=value, lo=value, hi=value
+                )
+            )
 
         return flux_values if flux_values else None
 
@@ -562,10 +596,13 @@ class FreefluxParser:
 
         # Merge labeling measurements
         if inst_labeling and labeling_measurement:
-            # Combine groups
-            all_groups = list(labeling_measurement.groups) + list(
-                inst_labeling.groups
-            )
+            existing_ids = {g.id for g in inst_labeling.groups}
+            unique_static = [
+                g
+                for g in labeling_measurement.groups
+                if g.id not in existing_ids
+            ]
+            all_groups = list(inst_labeling.groups) + unique_static
             labeling_measurement = LabelingMeasurement(groups=all_groups)
         elif inst_labeling:
             labeling_measurement = inst_labeling

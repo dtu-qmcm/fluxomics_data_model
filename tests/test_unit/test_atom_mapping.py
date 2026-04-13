@@ -4,7 +4,11 @@ Test atom mapping functionality including variant handling.
 
 import pytest
 import numpy as np
-from fluxomics_data_model.model.atom_mapping import AtomMapping, AtomMap, AtomAddress
+from fluxomics_data_model.model.atom_mapping import (
+    AtomMapping,
+    AtomMap,
+    AtomAddress,
+)
 from fluxomics_data_model.io.fluxml_parser import FluxMLParser
 
 
@@ -16,42 +20,60 @@ class TestAtomMappingBasic:
         reactant_items = [("A", "abc")]
         product_items = [("B", "abc")]
 
-        atom_map = AtomMapping.parse_letter_notation(reactant_items, product_items)
+        atom_map = AtomMapping.parse_letter_notation(
+            reactant_items, product_items
+        )
 
         # Check that mapping exists
         assert len(atom_map.mapping) == 3
 
         # Verify mappings
-        assert atom_map.mapping[AtomAddress("B", 1, None, 1)] == AtomAddress("A", 1, None, 1)
-        assert atom_map.mapping[AtomAddress("B", 2, None, 1)] == AtomAddress("A", 2, None, 1)
-        assert atom_map.mapping[AtomAddress("B", 3, None, 1)] == AtomAddress("A", 3, None, 1)
+        assert atom_map.mapping[AtomAddress("B", 1, None, 1)] == AtomAddress(
+            "A", 1, None, 1
+        )
+        assert atom_map.mapping[AtomAddress("B", 2, None, 1)] == AtomAddress(
+            "A", 2, None, 1
+        )
+        assert atom_map.mapping[AtomAddress("B", 3, None, 1)] == AtomAddress(
+            "A", 3, None, 1
+        )
 
     def test_parse_letter_notation_complex(self):
         """Test parsing complex letter notation with reordering."""
         reactant_items = [("A", "abc"), ("B", "de")]
         product_items = [("C", "edc"), ("D", "ba")]
 
-        atom_map = AtomMapping.parse_letter_notation(reactant_items, product_items)
+        atom_map = AtomMapping.parse_letter_notation(
+            reactant_items, product_items
+        )
 
         # Check that mapping exists
         assert len(atom_map.mapping) == 5
 
         # Verify mappings - e, d, c from second and first reactant
-        assert atom_map.mapping[AtomAddress("C", 1, None, 1)] == AtomAddress("B", 2, None, 1)  # e
-        assert atom_map.mapping[AtomAddress("C", 2, None, 1)] == AtomAddress("B", 1, None, 1)  # d
-        assert atom_map.mapping[AtomAddress("C", 3, None, 1)] == AtomAddress("A", 3, None, 1)  # c
+        assert atom_map.mapping[AtomAddress("C", 1, None, 1)] == AtomAddress(
+            "B", 2, None, 1
+        )  # e
+        assert atom_map.mapping[AtomAddress("C", 2, None, 1)] == AtomAddress(
+            "B", 1, None, 1
+        )  # d
+        assert atom_map.mapping[AtomAddress("C", 3, None, 1)] == AtomAddress(
+            "A", 3, None, 1
+        )  # c
 
     def test_to_letter_notation(self):
         """Test converting atom mapping to letter notation."""
         reactant_items = [("A", "abc")]
         product_items = [("B", "abc")]
 
-        atom_map = AtomMapping.parse_letter_notation(reactant_items, product_items)
+        atom_map = AtomMapping.parse_letter_notation(
+            reactant_items, product_items
+        )
         atom_mapping = AtomMapping(
             reaction_id="test",
             reactants=["A"],
             products=["B"],
-            maps={"test": atom_map}
+            maps={"test": atom_map},
         )
 
         notation = atom_mapping.to_letter_notation()
@@ -66,16 +88,22 @@ class TestAtomMappingBasic:
         atom_map = AtomMapping.parse_fluxml_cfg(
             reactant_cfgs=reactant_cfgs,
             product_cfgs=product_cfgs,
-            reactant_order=reactant_order
+            reactant_order=reactant_order,
         )
 
         # Check that mapping exists
         assert len(atom_map.mapping) == 3
 
         # Verify mappings
-        assert atom_map.mapping[AtomAddress("B", 1, "C", 1)] == AtomAddress("A", 1, "C", 1)
-        assert atom_map.mapping[AtomAddress("B", 2, "C", 1)] == AtomAddress("A", 2, "C", 1)
-        assert atom_map.mapping[AtomAddress("B", 3, "C", 1)] == AtomAddress("A", 3, "C", 1)
+        assert atom_map.mapping[AtomAddress("B", 1, "C", 1)] == AtomAddress(
+            "A", 1, "C", 1
+        )
+        assert atom_map.mapping[AtomAddress("B", 2, "C", 1)] == AtomAddress(
+            "A", 2, "C", 1
+        )
+        assert atom_map.mapping[AtomAddress("B", 3, "C", 1)] == AtomAddress(
+            "A", 3, "C", 1
+        )
 
     def test_parse_fluxml_cfg_reordering(self):
         """Test parsing FluxML cfg with atom reordering."""
@@ -86,16 +114,22 @@ class TestAtomMappingBasic:
         atom_map = AtomMapping.parse_fluxml_cfg(
             reactant_cfgs=reactant_cfgs,
             product_cfgs=product_cfgs,
-            reactant_order=reactant_order
+            reactant_order=reactant_order,
         )
 
         # Check that mapping exists
         assert len(atom_map.mapping) == 3
 
         # Verify reversed mappings
-        assert atom_map.mapping[AtomAddress("B", 1, "C", 1)] == AtomAddress("A", 3, "C", 1)
-        assert atom_map.mapping[AtomAddress("B", 2, "C", 1)] == AtomAddress("A", 2, "C", 1)
-        assert atom_map.mapping[AtomAddress("B", 3, "C", 1)] == AtomAddress("A", 1, "C", 1)
+        assert atom_map.mapping[AtomAddress("B", 1, "C", 1)] == AtomAddress(
+            "A", 3, "C", 1
+        )
+        assert atom_map.mapping[AtomAddress("B", 2, "C", 1)] == AtomAddress(
+            "A", 2, "C", 1
+        )
+        assert atom_map.mapping[AtomAddress("B", 3, "C", 1)] == AtomAddress(
+            "A", 1, "C", 1
+        )
 
 
 class TestAtomMappingVariants:
@@ -118,7 +152,7 @@ class TestAtomMappingVariants:
             reactants=["A"],
             products=["B"],
             maps={"test___1": map1, "test___2": map2},
-            weights={"test___1": 0.5, "test___2": 0.5}
+            weights={"test___1": 0.5, "test___2": 0.5},
         )
 
         # Check that we have 2 variants
@@ -146,7 +180,7 @@ class TestAtomMappingVariants:
             reactants=["A"],
             products=["B"],
             maps={"test___1": map1, "test___2": map2},
-            weights={"test___1": 0.5, "test___2": 0.5}
+            weights={"test___1": 0.5, "test___2": 0.5},
         )
 
         notation = atom_mapping.to_letter_notation()
@@ -172,7 +206,7 @@ class TestIsotopomerTransformation:
             reaction_id="test",
             reactants=["A"],
             products=["B"],
-            maps={"test": atom_map}
+            maps={"test": atom_map},
         )
 
         # Create input distribution: all unlabeled
@@ -180,8 +214,7 @@ class TestIsotopomerTransformation:
 
         # Transform
         product_dist = atom_mapping.transform_isotopomers(
-            reactant_dist,
-            atom_map_id="test"
+            reactant_dist, atom_map_id="test"
         )
 
         # Output should be identical
@@ -205,7 +238,7 @@ class TestIsotopomerTransformation:
             reactants=["A"],
             products=["B"],
             maps={"test___1": map1, "test___2": map2},
-            weights={"test___1": 0.5, "test___2": 0.5}
+            weights={"test___1": 0.5, "test___2": 0.5},
         )
 
         # Input: 50% labeled at position 1, 50% at position 2
@@ -228,7 +261,7 @@ class TestFluxMLParsingVariants:
         """Test parsing bsDAP reaction with 4 variants (2×2)."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Get bsDAP reaction
@@ -263,7 +296,7 @@ class TestFluxMLParsingVariants:
         """Test parsing bsMET reaction with 2 variants (1×2)."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Get bsMET reaction
@@ -294,7 +327,7 @@ class TestFluxMLParsingVariants:
         """Test that variant atom mappings have different FluxML string outputs."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Get bsMET atom mapping
@@ -308,10 +341,15 @@ class TestFluxMLParsingVariants:
         # Check that SUC mappings are different between variants
         # Variant 1: SUC atom 1 should come from SUCCOA atom 2
         from fluxomics_data_model.model.atom_mapping import AtomAddress
-        assert map1.mapping[AtomAddress("SUC", 1, "C", 1)] == AtomAddress("SUCCOA", 2, "C", 1)
+
+        assert map1.mapping[AtomAddress("SUC", 1, "C", 1)] == AtomAddress(
+            "SUCCOA", 2, "C", 1
+        )
 
         # Variant 2: SUC atom 1 should come from SUCCOA atom 1
-        assert map2.mapping[AtomAddress("SUC", 1, "C", 1)] == AtomAddress("SUCCOA", 1, "C", 1)
+        assert map2.mapping[AtomAddress("SUC", 1, "C", 1)] == AtomAddress(
+            "SUCCOA", 1, "C", 1
+        )
 
         # Verify they have different mappings for SUC
         suc_map1 = {k: v for k, v in map1.mapping.items() if k.mol == "SUC"}
@@ -333,7 +371,7 @@ class TestFluxMLParsingVariants:
         """Test atom mapping summary functionality."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Test bsMET with 2 variants
@@ -364,7 +402,7 @@ class TestBackwardCompatibility:
         """Test parsing simple reaction without variants."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Get a simple reaction (e.g., bsGLY)
@@ -386,7 +424,7 @@ class TestBackwardCompatibility:
         """Test converting simple reaction to letter notation."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Get a simple reaction

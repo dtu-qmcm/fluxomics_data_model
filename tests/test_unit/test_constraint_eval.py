@@ -21,8 +21,7 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids)
 
         formula = ConstraintFormula(
-            expression="uptGLYC = 0.5154",
-            is_mathml=False
+            expression="uptGLYC = 0.5154", is_mathml=False
         )
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
@@ -47,8 +46,7 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids, parameters)
 
         formula = ConstraintFormula(
-            expression="bmALA >= 0.75*0.22601*mu",
-            is_mathml=False
+            expression="bmALA >= 0.75*0.22601*mu", is_mathml=False
         )
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
@@ -73,10 +71,7 @@ class TestConstraintEvaluator:
         reaction_ids = ["exCO2", "PK"]
         evaluator = ConstraintEvaluator(reaction_ids)
 
-        formula = ConstraintFormula(
-            expression="exCO2 <= 0.44",
-            is_mathml=False
-        )
+        formula = ConstraintFormula(expression="exCO2 <= 0.44", is_mathml=False)
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
 
@@ -100,8 +95,7 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids)
 
         formula = ConstraintFormula(
-            expression="r1 + 2*r2 - r3 = 1.5",
-            is_mathml=False
+            expression="r1 + 2*r2 - r3 = 1.5", is_mathml=False
         )
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
@@ -119,10 +113,7 @@ class TestConstraintEvaluator:
         reaction_ids = ["r1", "r2"]
         evaluator = ConstraintEvaluator(reaction_ids)
 
-        formula = ConstraintFormula(
-            expression="1 = 1",
-            is_mathml=False
-        )
+        formula = ConstraintFormula(expression="1 = 1", is_mathml=False)
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
 
@@ -138,8 +129,7 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids, parameters)
 
         formula = ConstraintFormula(
-            expression="growth = mu * yield_factor",
-            is_mathml=False
+            expression="growth = mu * yield_factor", is_mathml=False
         )
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
@@ -159,8 +149,7 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids)
 
         formula = ConstraintFormula(
-            expression="r1 + r2*r2 = 5",
-            is_mathml=False
+            expression="r1 + r2*r2 = 5", is_mathml=False
         )
 
         constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
@@ -200,7 +189,9 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids)
 
         formulas = [
-            ConstraintFormula(name="r1_fix", expression="r1 = 1.0", is_mathml=False),
+            ConstraintFormula(
+                name="r1_fix", expression="r1 = 1.0", is_mathml=False
+            ),
             ConstraintFormula(expression="r2 >= 0.5", is_mathml=False),
         ]
 
@@ -238,11 +229,12 @@ class TestConstraintEvaluator:
         evaluator = ConstraintEvaluator(reaction_ids)
 
         formula = ConstraintFormula(
-            expression="<math>...</math>",
-            is_mathml=True
+            expression="<math>...</math>", is_mathml=True
         )
 
-        with pytest.raises(NotImplementedError, match="MathML constraints not yet supported"):
+        with pytest.raises(
+            NotImplementedError, match="MathML constraints not yet supported"
+        ):
             evaluator.parse_formula(formula)
 
 
@@ -253,7 +245,7 @@ class TestConstraintEvaluatorIntegration:
         """Test parsing constraints from actual FluxML file."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         # Get experiment and constraints
@@ -268,10 +260,10 @@ class TestConstraintEvaluatorIntegration:
         # Look for "mu = X" constraint
         parameters = {}
         for formula in exp.constraints.net.formulas:
-            if '=' in formula.expression and 'mu' in formula.expression:
-                parts = formula.expression.split('=')
-                if parts[0].strip() == 'mu':
-                    parameters['mu'] = float(parts[1].strip())
+            if "=" in formula.expression and "mu" in formula.expression:
+                parts = formula.expression.split("=")
+                if parts[0].strip() == "mu":
+                    parameters["mu"] = float(parts[1].strip())
                     break
 
         # Create evaluator
@@ -282,7 +274,9 @@ class TestConstraintEvaluatorIntegration:
 
         for formula in test_formulas:
             try:
-                constraint_fn, operator, rhs_value = evaluator.parse_formula(formula)
+                constraint_fn, operator, rhs_value = evaluator.parse_formula(
+                    formula
+                )
                 print(f"✓ Parsed: {formula.expression}")
                 print(f"  Operator: {operator}, RHS: {rhs_value}")
             except Exception as e:
@@ -297,7 +291,7 @@ class TestConstraintEvaluatorIntegration:
         """Test evaluating constraints on a flux vector."""
         parser = FluxMLParser()
         data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML-Test/fluxml-model/models/CN_network_model_BCG.fml"
+            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
         )
 
         exp = data_model.experiments[0]
@@ -307,8 +301,8 @@ class TestConstraintEvaluatorIntegration:
         parameters = {}
         if exp.constraints and exp.constraints.net:
             for formula in exp.constraints.net.formulas:
-                if '=' in formula.expression:
-                    parts = formula.expression.split('=', 1)
+                if "=" in formula.expression:
+                    parts = formula.expression.split("=", 1)
                     lhs = parts[0].strip()
                     rhs = parts[1].strip()
                     # If LHS is a single symbol and RHS is numeric, treat as parameter
@@ -330,7 +324,9 @@ class TestConstraintEvaluatorIntegration:
 
             for i, formula in enumerate(formulas_to_test):
                 try:
-                    constraint_fn, operator, rhs = evaluator.parse_formula(formula)
+                    constraint_fn, operator, rhs = evaluator.parse_formula(
+                        formula
+                    )
                     residual = constraint_fn(flux_vector)
                     results[f"constraint_{i}"] = float(residual)
                 except Exception as e:

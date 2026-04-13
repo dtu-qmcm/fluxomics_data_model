@@ -63,6 +63,9 @@ class Reaction(BaseModel):
     stoichiometry_dict: Optional[Dict[str, float]] = Field(
         default=None, exclude=True, description="Stoichiometry"
     )
+    flux_bounds_array: Optional[JAXArray] = Field(
+        default=None, exclude=True, description="JAX flux bounds array"
+    )
 
     class Config:
         frozen = True

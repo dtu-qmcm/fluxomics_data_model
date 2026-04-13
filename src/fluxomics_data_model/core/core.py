@@ -127,14 +127,13 @@ class Model(BaseModel):
 
     @property
     def computational_reaction_ids(self) -> frozenset[str]:
-        """Get all computational reaction IDs (includes variants)."""
+        """Get all computational reaction IDs (includes variants and base IDs)."""
         ids = []
         for reaction in self.reactions:
             if reaction.atom_mapping_ids is not None:
-                # Reaction has variants
+                ids.append(reaction.id)
                 ids.extend(reaction.atom_mapping_ids)
             else:
-                # Regular reaction without variants
                 ids.append(reaction.id)
         return frozenset(ids)
 
