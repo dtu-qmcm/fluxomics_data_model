@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jnp
 
-from fluxomics_data_model.output.simulation import (
+from fluxomics_data_converter.output.simulation import (
     FluxValue,
     MetaboliteSizeValue,
     Variables,

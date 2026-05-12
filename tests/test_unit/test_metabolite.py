@@ -1,8 +1,8 @@
 import pytest
 import jax.numpy as jnp
 
-from fluxomics_data_model.model.metabolite import Metabolite
-from fluxomics_data_model.core.common import Annotation
+from fluxomics_data_converter.model.metabolite import Metabolite
+from fluxomics_data_converter.core.common import Annotation
 
 
 class TestMetaboliteCreation:

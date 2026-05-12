@@ -1,15 +1,28 @@
-"""
-Tests for JAX-compatible constraint evaluation.
-"""
+"""Tests for JAX-compatible constraint evaluation."""
 
 import pytest
 import numpy as np
 import jax.numpy as jnp
 from jax import grad
+from pathlib import Path
 
-from fluxomics_data_model.model import ConstraintEvaluator
-from fluxomics_data_model.model.constraint import ConstraintFormula
-from fluxomics_data_model.io.fluxml_parser import FluxMLParser
+from fluxomics_data_converter.model import ConstraintEvaluator
+from fluxomics_data_converter.model.constraint import ConstraintFormula
+from fluxomics_data_converter.io.fluxml_parser import FluxMLParser
+
+# Fixture file — resolved relative to this test file.
+_BCG_FML = (
+    Path(__file__).parent.parent.parent
+    / "data"
+    / "FluxML_tests"
+    / "fluxml-model"
+    / "models"
+    / "CN_network_model_BCG.fml"
+)
+_BCG_SKIP = pytest.mark.skipif(
+    not _BCG_FML.exists(),
+    reason=f"BCG fixture not found at {_BCG_FML}",
+)
 
 
 class TestConstraintEvaluator:
@@ -241,12 +254,11 @@ class TestConstraintEvaluator:
 class TestConstraintEvaluatorIntegration:
     """Test constraint evaluator with real FluxML file."""
 
+    @_BCG_SKIP
     def test_parse_fluxml_constraints(self):
         """Test parsing constraints from actual FluxML file."""
         parser = FluxMLParser()
-        data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
-        )
+        data_model = parser.parse_file(str(_BCG_FML))
 
         # Get experiment and constraints
         exp = data_model.experiments[0]
@@ -287,12 +299,11 @@ class TestConstraintEvaluatorIntegration:
         # At least some should parse successfully
         assert True  # If we get here, basic parsing works
 
+    @_BCG_SKIP
     def test_evaluate_on_flux_vector(self):
         """Test evaluating constraints on a flux vector."""
         parser = FluxMLParser()
-        data_model = parser.parse_file(
-            "/home/te/Projects/data_model/fluxomics_data_model/data/FluxML_tests/fluxml-model/models/CN_network_model_BCG.fml"
-        )
+        data_model = parser.parse_file(str(_BCG_FML))
 
         exp = data_model.experiments[0]
         reaction_ids = list(data_model.model.computational_reaction_ids)
@@ -329,7 +340,7 @@ class TestConstraintEvaluatorIntegration:
                     )
                     residual = constraint_fn(flux_vector)
                     results[f"constraint_{i}"] = float(residual)
-                except Exception as e:
+                except Exception:
                     # Skip constraints that can't be parsed
                     pass
 

@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jnp
 
-from fluxomics_data_model.experiment.tracer import Tracers, LabelComposition
+from fluxomics_data_converter.experiment.tracer import Tracers, LabelComposition
 
 
 class TestLabelComposition:

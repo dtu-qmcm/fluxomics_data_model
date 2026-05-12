@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jnp
 
-from fluxomics_data_model.model.reaction import Reaction
+from fluxomics_data_converter.model.reaction import Reaction
 
 
 class TestReactionCreation:
@@ -82,7 +82,7 @@ class TestReactionEquation:
 class TestReactionVariants:
     def test_no_variants(self):
         r = Reaction(id="PGI", reactants=["G6P"], products=["F6P"])
-        assert r.atom_mapping_ids is None
+        assert r.atom_transition_ids is None
         assert r.is_variant_reaction is False
         assert r.n_variants == 1
 
@@ -91,9 +91,9 @@ class TestReactionVariants:
             id="SCS",
             reactants=["SUCCOA"],
             products=["SUC"],
-            atom_mapping_ids=["SCS___1", "SCS___2"],
+            atom_transition_ids=["SCS___1", "SCS___2"],
         )
-        assert r.atom_mapping_ids == ["SCS___1", "SCS___2"]
+        assert r.atom_transition_ids == ["SCS___1", "SCS___2"]
         assert r.is_variant_reaction is True
         assert r.n_variants == 2
 
@@ -102,7 +102,7 @@ class TestReactionVariants:
             id="r1",
             reactants=["A"],
             products=["B"],
-            atom_mapping_ids=["r1___1"],
+            atom_transition_ids=["r1___1"],
         )
         assert r.is_variant_reaction is False
         assert r.n_variants == 1

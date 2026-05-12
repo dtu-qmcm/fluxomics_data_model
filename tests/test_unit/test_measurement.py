@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jnp
 
-from fluxomics_data_model.experiment.measurement import (
+from fluxomics_data_converter.experiment.measurement import (
     Group,
     Datum,
     MeasurementData,
@@ -12,9 +12,8 @@ from fluxomics_data_model.experiment.measurement import (
     NetFlux,
     ExchangeFlux,
     MetaboliteSize,
-    MetaboliteSizeMeasurement,
 )
-from fluxomics_data_model.core.common import TextualOrMath
+from fluxomics_data_converter.core.common import TextualOrMath
 
 
 class TestGroup:

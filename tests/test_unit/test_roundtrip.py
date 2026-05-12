@@ -1,5 +1,4 @@
-"""
-Tests for round-trip conversion between formats.
+"""Tests for round-trip conversion between formats.
 
 Tests that data is preserved when converting between:
 - FluxML -> MTF -> FluxML
@@ -11,17 +10,12 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from fluxomics_data_model.io import (
-    FluxMLParser,
-    FluxMLWriter,
-    MTFParser,
-    MTFWriter,
+from fluxomics_data_converter.io import (
     parse_fluxml_file,
     write_fluxml,
     parse_mtf,
     write_mtf,
 )
-from fluxomics_data_model.core.core import FluxomicsDataModel
 
 
 # Path to benchmark data

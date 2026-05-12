@@ -1,5 +1,4 @@
-"""
-Tests for FreeFlux writer and 3-way format round-trip.
+"""Tests for FreeFlux writer and 3-way format round-trip.
 
 Tests that data is preserved when converting between:
 - FreeFlux -> FluxML -> FreeFlux
@@ -12,13 +11,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from fluxomics_data_model.io import (
-    FluxMLParser,
-    FluxMLWriter,
-    MTFParser,
-    MTFWriter,
-    FreefluxParser,
-    FreefluxWriter,
+from fluxomics_data_converter.io import (
     parse_fluxml_file,
     write_fluxml,
     parse_mtf,
@@ -26,7 +19,7 @@ from fluxomics_data_model.io import (
     parse_freeflux,
     write_freeflux,
 )
-from fluxomics_data_model.core.core import FluxomicsDataModel
+from fluxomics_data_converter.core.core import FluxomicsData
 
 
 FREEFLUX_DIR = Path(__file__).parent.parent.parent / "data" / "freeflux_tests"
@@ -87,17 +80,23 @@ class TestFreefluxWriter:
         reason="FreeFlux toy test data not found",
     )
     def test_multiple_experiments_requires_name(self, temp_dir):
-        from fluxomics_data_model.core.core import Model, Experiments, Metadata
-        from fluxomics_data_model.model.metabolite import Metabolite
-        from fluxomics_data_model.model.reaction import Reaction
+        from fluxomics_data_converter.core.core import (
+            MetabolicNetworkModel,
+            LabelingExperiments,
+        )
+        from fluxomics_data_converter.model.metabolite import Metabolite
+        from fluxomics_data_converter.model.reaction import Reaction
 
-        m = Model(
+        m = MetabolicNetworkModel(
             metabolites=[Metabolite(id="A"), Metabolite(id="B")],
             reactions=[Reaction(id="r1", reactants=["A"], products=["B"])],
         )
-        dm = FluxomicsDataModel(
+        dm = FluxomicsData(
             model=m,
-            experiments=[Experiments(name="exp1"), Experiments(name="exp2")],
+            experiments=[
+                LabelingExperiments(name="exp1"),
+                LabelingExperiments(name="exp2"),
+            ],
         )
         with pytest.raises(ValueError, match="Multiple experiments"):
             write_freeflux(dm, str(temp_dir))

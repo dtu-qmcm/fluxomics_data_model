@@ -1,7 +1,7 @@
 import pytest
 
-from fluxomics_data_model.core.common import DictList
-from fluxomics_data_model.model.metabolite import Metabolite
+from fluxomics_data_converter.core.common import DictList
+from fluxomics_data_converter.model.metabolite import Metabolite
 
 
 def _make_metabolite(mid, name=None, atoms=0):

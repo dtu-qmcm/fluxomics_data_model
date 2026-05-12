@@ -1,12 +1,10 @@
-"""
-Tests for MTF (influx_si) format parser.
-"""
+"""Tests for MTF (influx_si) format parser."""
 
 import pytest
 from pathlib import Path
 
-from fluxomics_data_model.io import MTFParser, parse_mtf
-from fluxomics_data_model.core.core import FluxomicsDataModel
+from fluxomics_data_converter.io import MTFParser, parse_mtf
+from fluxomics_data_converter.core.core import FluxomicsData
 
 
 # Path to test data
@@ -20,8 +18,8 @@ class TestMTFParserBasic:
         """Test parsing E.coli network file."""
         model = parse_mtf(TEST_DATA_DIR / "Ecoli" / "e_coli")
 
-        assert isinstance(model, FluxomicsDataModel)
-        assert model.info.name == "e_coli"
+        assert isinstance(model, FluxomicsData)
+        assert model.metadata.name == "e_coli"
 
         # Check reactions were parsed
         assert len(model.model.reactions) == 86
@@ -108,10 +106,10 @@ class TestMTFParserReactions:
         assert ald.products == ["GA3P", "GA3P"]
 
     def test_atom_mapping_created(self):
-        """Test that atom mappings are created for reactions."""
+        """Test that atom transitions are created for reactions."""
         model = parse_mtf(TEST_DATA_DIR / "Ecoli" / "e_coli")
 
-        # Check atom mapping exists
+        # Check atom transition exists
         assert "pgi" in model.model.atom_mappings
         pgi_mapping = model.model.atom_mappings["pgi"]
 
@@ -161,7 +159,7 @@ class TestMTFParserConvenienceFunctions:
         """Test that parsing works with full file path including extension."""
         model = parse_mtf(TEST_DATA_DIR / "Ecoli" / "e_coli.netw")
 
-        assert isinstance(model, FluxomicsDataModel)
+        assert isinstance(model, FluxomicsData)
         assert len(model.model.reactions) == 86
 
     def test_parser_instance(self):
@@ -169,7 +167,7 @@ class TestMTFParserConvenienceFunctions:
         parser = MTFParser()
         model = parser.parse(TEST_DATA_DIR / "Ecoli" / "e_coli")
 
-        assert isinstance(model, FluxomicsDataModel)
+        assert isinstance(model, FluxomicsData)
 
     def test_missing_network_file(self):
         """Test error when network file is missing."""
@@ -181,6 +179,6 @@ class TestMTFParserConvenienceFunctions:
         model = parse_mtf(TEST_DATA_DIR / "Ecoli" / "e_coli")
 
         repr_str = repr(model)
-        assert "Fluxomics Data Model Summary" in repr_str
+        assert "Fluxomics Data Converter Summary" in repr_str
         assert "e_coli" in repr_str
         assert "Reactions" in repr_str

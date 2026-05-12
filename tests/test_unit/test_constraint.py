@@ -1,6 +1,6 @@
 import pytest
 
-from fluxomics_data_model.model.constraint import (
+from fluxomics_data_converter.model.constraint import (
     ConstraintFormula,
     NetConstraints,
     ExchangeConstraints,
