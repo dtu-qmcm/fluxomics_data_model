@@ -346,6 +346,7 @@ class FluxomicsData(BaseModel):
         )
         drain_ids = frozenset(
             f"{m}_out" for m in (all_produced - all_consumed - input_pools)
+            if not m.endswith("_ext")
         )
         valid_reaction_ids = computational_reaction_ids | drain_ids
 

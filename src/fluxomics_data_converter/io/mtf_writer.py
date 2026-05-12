@@ -185,7 +185,12 @@ class MTFWriter:
             for exp in self._model.experiments
             for tracer in exp.tracers
         }
-        sink_metabolites = sorted(produced - consumed - input_pools)
+        # Exclude _ext metabolites: they are the external products of existing
+        # drain reactions (e.g. E_ext from "E_out: E ->> E_ext") and must not
+        # get an additional drain reaction of their own.
+        sink_metabolites = sorted(
+            m for m in (produced - consumed - input_pools) if not m.endswith("_ext")
+        )
         if sink_metabolites:
             lines.append("# Drain reactions (auto-generated for sink metabolites)")
             lines.append("# " + "-" * 60)
@@ -236,8 +241,27 @@ class MTFWriter:
         # Build arrow based on reversibility
         arrow = "<->" if reversible else "->>"
 
-        # Handle reactions with no products (drains)
+        # Handle drain reactions with no products.
+        # influx_si requires an explicit external product for atom balance.
+        # If this looks like a drain (_out suffix), synthesise one from the
+        # reactant atom count; otherwise emit with an empty product side.
         if not reaction.products:
+            if rxn_id.endswith("_out") and reaction.reactants:
+                metab_id = reaction.reactants[0]
+                metab = next(
+                    (m for m in self._model.model.metabolites if m.id == metab_id),
+                    None,
+                )
+                atom_count = (
+                    (metab.atoms if metab else None)
+                    or self._metabolite_atom_counts.get(metab_id)
+                    or 0
+                )
+                if atom_count:
+                    atoms = "".join(chr(ord("a") + i) for i in range(min(atom_count, 26)))
+                    return (
+                        f"{rxn_id}: {metab_id} ({atoms}) {arrow} {metab_id}_ext ({atoms})"
+                    )
             return f"{rxn_id}: {reactants_str} {arrow}"
 
         return f"{rxn_id}: {reactants_str} {arrow} {products_str}"
@@ -410,10 +434,15 @@ class MTFWriter:
                 # Group ID format varies, so we search for matching data
                 for datum in data:
                     if datum.id.startswith(group.id):
-                        # Extract isospecies from datum id
-                        # (e.g., "group:M0" -> "M0")
+                        # Extract isospecies: prefer "group:M0" id split,
+                        # fall back to datum.weight field (FML-parsed datums).
                         parts = datum.id.split(":")
-                        isospecies = parts[-1] if len(parts) > 1 else ""
+                        if len(parts) > 1:
+                            isospecies = parts[-1]
+                        elif datum.weight is not None:
+                            isospecies = f"M{datum.weight}"
+                        else:
+                            isospecies = ""
 
                         time_str = (
                             str(datum.time) if datum.time is not None else ""
@@ -617,7 +646,10 @@ class MTFWriter:
             for exp in self._model.experiments
             for t in exp.tracers
         }
-        sink_mets = sorted(all_produced - all_consumed - input_pools)
+        sink_mets = sorted(
+            m for m in (all_produced - all_consumed - input_pools)
+            if not m.endswith("_ext")
+        )
         drain_ids = [f"{m}_out" for m in sink_mets]
         all_rxn_names = rxn_names + drain_ids
         n_all = len(all_rxn_names)
@@ -704,9 +736,12 @@ class MTFWriter:
             for t in exp.tracers
         }
         sink_mets = sorted(
-            {m for rxn in reactions for m in rxn.products}
-            - {m for rxn in reactions for m in rxn.reactants}
-            - input_pools
+            m for m in (
+                {m for rxn in reactions for m in rxn.products}
+                - {m for rxn in reactions for m in rxn.reactants}
+                - input_pools
+            )
+            if not m.endswith("_ext")
         )
 
         all_rxn_names = rxn_names + drain_ids
@@ -800,7 +835,10 @@ class MTFWriter:
                     for exp in self._model.experiments
                     for t in exp.tracers
                 }
-                sink_ids_ = sorted(all_produced_ - all_consumed_ - input_pools_)
+                sink_ids_ = sorted(
+                    m for m in (all_produced_ - all_consumed_ - input_pools_)
+                    if not m.endswith("_ext")
+                )
                 drain_ids_ = [f"{m}_out" for m in sink_ids_]
 
                 # QR-based F/D assignment from stoichiometric null space

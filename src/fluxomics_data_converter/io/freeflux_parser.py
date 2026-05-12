@@ -552,7 +552,9 @@ class FreefluxParser:
                 for rxn in self._reactions.values():
                     all_produced.update(rxn.products)
                     all_consumed.update(rxn.reactants)
-                sink_mets = sorted(all_produced - all_consumed)
+                sink_mets = sorted(
+                    m for m in (all_produced - all_consumed) if not m.endswith("_ext")
+                )
                 drain_ids = [f"{m}_out" for m in sink_mets]
                 targets = list(self._reactions.keys()) + drain_ids
             else:
