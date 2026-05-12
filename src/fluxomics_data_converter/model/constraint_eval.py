@@ -1,5 +1,33 @@
-"""
-JAX-compatible constraint evaluation using SymPy.
+"""JAX-compatible constraint evaluation bridging SymPy and JAX.
+
+:class:`ConstraintEvaluator` converts
+:class:`~fluxomics_data_converter.model.constraint.ConstraintFormula` objects —
+which store constraints as plain strings such as ``"bmALA >= 0.75*mu"`` —
+into callable JAX functions that can be embedded in gradient-based
+optimisation loops.
+
+The bridge works as follows:
+
+1. **Parsing** — :meth:`ConstraintFormula.parse_sympy` tokenises the
+   expression and returns ``(lhs_expr, operator, rhs_expr)`` as SymPy
+   objects.
+2. **Parameter substitution** — known scalar parameters (e.g.
+   ``{"mu": 0.03}``) are substituted into both sides, so the RHS reduces
+   to a numeric constant.
+3. **JAX compilation** — :func:`sympy.lambdify` converts the LHS expression
+   into a Python callable with ``modules="jax"``, producing a JAX-traceable
+   function.
+4. **Index mapping** — the evaluator resolves each SymPy symbol to its
+   position in the flux vector using the ``reaction_ids`` list supplied at
+   construction time, then wraps the lambdified function in a closure that
+   extracts the relevant elements.
+
+Limitations
+-----------
+- The RHS must be numeric after parameter substitution.  Constraints of the
+  form ``flux_A = flux_B`` (both sides symbolic) are not supported; rewrite
+  them as ``flux_A - flux_B = 0``.
+- MathML constraints raise ``NotImplementedError``.
 """
 
 from typing import Dict, Callable, Tuple, List, Optional
@@ -11,8 +39,7 @@ from .constraint import ConstraintFormula
 
 
 class ConstraintEvaluator:
-    """
-    Evaluates constraint formulas as JAX-compatible functions.
+    """Evaluates constraint formulas as JAX-compatible functions.
 
     Parses textual constraint formulas using SymPy and converts them
     to JAX functions that can be used in optimization.
@@ -23,8 +50,7 @@ class ConstraintEvaluator:
         reaction_ids: List[str],
         parameters: Optional[Dict[str, float]] = None,
     ):
-        """
-        Initialize constraint evaluator.
+        """Initialize constraint evaluator.
 
         Args:
             reaction_ids: List of reaction IDs (order determines flux
@@ -41,8 +67,7 @@ class ConstraintEvaluator:
     def parse_formula(
         self, formula: ConstraintFormula
     ) -> Tuple[Callable[[Array], Array], str, float]:
-        """
-        Parse a constraint formula into a JAX-compatible function.
+        """Parse a constraint formula into a JAX-compatible function.
 
         The constraint is converted to the form: lhs - rhs [op] 0
         For inequality constraints (>= or <=), the returned function
@@ -152,8 +177,7 @@ class ConstraintEvaluator:
     def parse_all(
         self, formulas: List[ConstraintFormula]
     ) -> List[Tuple[Callable[[Array], Array], str, float, Optional[str]]]:
-        """
-        Parse all constraint formulas.
+        """Parse all constraint formulas.
 
         Args:
             formulas: List of ConstraintFormula objects
@@ -170,8 +194,7 @@ class ConstraintEvaluator:
     def evaluate_constraints(
         self, flux_vector: Array, formulas: List[ConstraintFormula]
     ) -> Dict[str, float]:
-        """
-        Evaluate all constraints for a given flux vector.
+        """Evaluate all constraints for a given flux vector.
 
         Args:
             flux_vector: JAX array of flux values

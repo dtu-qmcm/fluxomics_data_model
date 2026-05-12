@@ -1,5 +1,20 @@
-"""
-Core FluxML data structures.
+"""Core Fluxomics Data Converter structures.
+
+This module defines the four top-level classes that form the root of the
+data hierarchy:
+
+- :class:`Metadata`  — optional (modeler, strain, date …)
+- :class:`MetabolicNetworkModel`     — required (metabolites, reactions, atom
+  mappings)
+- :class:`LabelingExperiments` — required (tracers, ,
+  measurements, simulation variables)
+- :class:`FluxomicsData` — the root ``<fluxml>`` element; holds one
+  ``MetabolicNetworkModel`` and one or more ``LabelingExperiments``
+
+All classes are immutable Pydantic models (``frozen=True``).  Numerical
+(JAX) operations that require a stable ordering of metabolites and reactions
+must use :attr:`MetabolicNetworkModel.ordered_metabolite_ids` and
+:attr:`MetabolicNetworkModel.ordered_reaction_ids`.
 """
 
 from typing import Optional, List, Dict, Any
@@ -8,7 +23,7 @@ import re
 from pydantic import BaseModel, Field, field_validator
 import jax.numpy as jnp
 from ..model.metabolite import Metabolite
-from .common import DictList, AtomMappingsDict
+from .common import DictList, AtomTransitionsNetwork
 from ..model.reaction import Reaction
 from ..model.constraint import Constraints
 from ..experiment.measurement import Measurement
@@ -17,10 +32,13 @@ from ..output.simulation import Simulation
 
 
 class Metadata(BaseModel):
-    """
-    FluxML info section containing metadata.
+    """Optional metadata block.
 
-    Corresponds to fluxml/info
+    All fields are optional; a ``Metadata`` object with all ``None`` values
+    is valid.  The ``date`` field accepts both ``datetime`` objects and
+    FluxML-style timestamp strings (``"YYYY-MM-DD HH:MM:SS"``).
+
+    Corresponds to ``fluxml/info``.
     """
 
     name: Optional[str] = Field(default=None, description="Model name")
@@ -48,7 +66,7 @@ class Metadata(BaseModel):
     @field_validator("date", mode="before")
     @classmethod
     def parse_date(cls, v):
-        """Parse FluxML timestamp format: YYYY-MM-DD HH:MM:SS"""
+        """Parse FluxML timestamp format: YYYY-MM-DD HH:MM:SS."""
         if isinstance(v, str):
             # FluxML timestamp pattern: YYYY-MM-DD HH:MM:SS
             if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", v):
@@ -56,11 +74,20 @@ class Metadata(BaseModel):
         return v
 
 
-class Model(BaseModel):
-    """
-    FluxML model containing metabolites and reactions.
+class MetabolicNetworkModel(BaseModel):
+    """Metabolic network model.
 
-    Corresponds to fluxml/reactionnetwork
+    Holds all metabolites, reactions, and atom transitions.  Cross-references
+    (every reactant/product ID must exist in ``metabolites``) are validated
+    at construction time.
+
+    Ordering note
+    -------------
+    ``metabolite_ids`` and ``reaction_ids`` are ``frozenset`` values and
+    therefore have **no defined iteration order**.  Use
+    :attr:`ordered_metabolite_ids` and :attr:`ordered_reaction_ids` whenever
+    you need a deterministic sequence that corresponds to matrix rows/columns.
+
     """
 
     metabolites: DictList[Metabolite] = Field(
@@ -71,9 +98,9 @@ class Model(BaseModel):
         default_factory=lambda: DictList[Reaction](),
         description="Reaction definitions",
     )
-    atom_mappings: AtomMappingsDict = Field(
-        default_factory=AtomMappingsDict,
-        description="Atom mappings keyed by reaction ID",
+    atom_mappings: AtomTransitionsNetwork = Field(
+        default_factory=AtomTransitionsNetwork,
+        description="Atom transitions keyed by reaction ID",
     )
     compartments: List[str] = Field(
         default_factory=list, description="List of compartments in the model"
@@ -84,6 +111,7 @@ class Model(BaseModel):
         extra = "forbid"
 
     def __init__(self, **data):
+        """Initialise and validate metabolite/reaction cross-references."""
         super().__init__(**data)
         self._validate_cross_references()
 
@@ -117,35 +145,62 @@ class Model(BaseModel):
         return frozenset(self.reactions.ids)
 
     @property
-    def atom_mapping_ids(self) -> List[str]:
-        """All ids for atom mappings including variants."""
+    def atom_transition_ids(self) -> List[str]:
+        """All ids for atom transitions including variants."""
         ids = []
         for reaction in self.reactions:
-            if reaction.atom_mapping_ids is not None:
-                ids.extend(reaction.atom_mapping_ids)
+            if reaction.atom_transition_ids is not None:
+                ids.extend(reaction.atom_transition_ids)
         return ids
 
     @property
     def computational_reaction_ids(self) -> frozenset[str]:
-        """Get all computational reaction IDs (includes variants and base IDs)."""
+        """Get all computational reaction IDs (both variants and base IDs)."""
         ids = []
         for reaction in self.reactions:
-            if reaction.atom_mapping_ids is not None:
+            if reaction.atom_transition_ids is not None:
                 ids.append(reaction.id)
-                ids.extend(reaction.atom_mapping_ids)
+                ids.extend(reaction.atom_transition_ids)
             else:
                 ids.append(reaction.id)
         return frozenset(ids)
 
-    def get_stoichiometric_matrix(self) -> jnp.ndarray:
+    @property
+    def ordered_metabolite_ids(self) -> List[str]:
+        """Return metabolite IDs in stable insertion order.
+
+        Use this (not ``metabolite_ids``) whenever the order of IDs must
+        correspond to rows/columns of a numerical matrix, so that results
+        are reproducible across interpreter runs.
         """
-        Get stoichiometric matrix for JAX computations.
+        return list(self.metabolites.ids)
+
+    @property
+    def ordered_reaction_ids(self) -> List[str]:
+        """Return reaction IDs in stable insertion order.
+
+        Use this (not ``reaction_ids``) whenever the order of IDs must
+        correspond to columns of a numerical matrix.
+        """
+        return list(self.reactions.ids)
+
+    def get_stoichiometric_matrix(self) -> jnp.ndarray:
+        """Build a stoichiometric matrix of shape (n_metabolites, n_reactions).
+
+        Rows correspond to metabolites and columns to reactions, both in
+        stable insertion order (see :attr:`ordered_metabolite_ids` and
+        :attr:`ordered_reaction_ids`).  Using ``DictList.ids`` instead of
+        iterating over a ``frozenset`` guarantees that the row ordering is
+        deterministic across interpreter runs regardless of Python's hash
+        randomisation (``PYTHONHASHSEED``).
 
         Returns:
-            JAX array of shape (n_metabolites, n_reactions)
+            JAX array of shape ``(n_metabolites, n_reactions)`` where
+            ``S[i, j]`` is the stoichiometric coefficient of metabolite *i*
+            in reaction *j* (negative for reactants, positive for products).
         """
-        metabolite_ids = list(self.metabolite_ids)
-        # reaction_ids = list(self.reaction_ids)  # Unused variable
+        # Use insertion-ordered list, NOT self.metabolite_ids (a frozenset).
+        metabolite_ids = self.ordered_metabolite_ids
 
         matrix = []
         for reaction in self.reactions:
@@ -155,11 +210,13 @@ class Model(BaseModel):
         return jnp.stack(matrix, axis=1)
 
 
-class Experiments(BaseModel):
-    """
-    FluxML experimental setup.
+class LabelingExperiments(BaseModel):
+    """Isotope labeling experiment data.
 
-    Corresponds to fluxml/experiments
+    A specific set of tracers, local constraints,
+    measurement data, and simulation variables.  The ``name`` attribute must
+    be unique within a :class:`FluxomicsData`; 
+
     """
 
     name: str = Field(description="Experiment name")
@@ -202,8 +259,7 @@ class Experiments(BaseModel):
     def get_tracer_composition_matrix(
         self, metabolite_ids: List[str]
     ) -> jnp.ndarray:
-        """
-        Get tracer composition matrix for JAX computations.
+        """Get tracer composition matrix for JAX computations.
 
         Returns:
             JAX array of shape (n_metabolites, n_isotopomers)
@@ -225,22 +281,38 @@ class Experiments(BaseModel):
         return jnp.stack(padded)
 
 
-class FluxomicsDataModel(BaseModel):
+class FluxomicsData(BaseModel):
+    """Root data model for fluxomics data.
+
+    This is the primary entry point for all fluxomics data.  It combines one
+    :class:`MetabolicNetworkModel` (the reaction network) with one or more
+    :class:`LabelingExperiments` (experimental configurations), optional global
+    :class:`~fluxomics_data_converter.model.constraint.Constraints`, and
+    optional :class:`Metadata`.
+
+    Cross-references between experiments and the model (tracer metabolites,
+    simulation flux variables) are validated at construction time.
+
+    Numerical usage
+    ---------------
+    Call :meth:`to_jax_representation` to obtain a dictionary of JAX arrays
+    suitable for gradient-based optimisation.  When the model contains more
+    than one experiment, pass ``experiment_name`` to select which
+    experiment's bounds to use::
+
+        jax_data = fdm.to_jax_representation(experiment_name="default")
+        S = jax_data["stoichiometric_matrix"]   # shape (n_met, n_rxn)
+
     """
-    Root FluxML object containing complete model specification.
 
-    This is the main entry point for FluxML data, designed for JAX compatibility
-    with immutable data structures and validation.
-
-    Corresponds to fluxml root element
-    """
-
-    model: Model = Field(description="Model definition")
-    info: Optional[Metadata] = Field(default=None, description="Model metadata")
+    model: MetabolicNetworkModel = Field(
+        description="Metabolic network model definition"
+    )
+    metadata: Optional[Metadata] = Field(default=None, description="Metadata")
     constraints: Optional[Constraints] = Field(
         default=None, description="Model constraints"
     )
-    experiments: List[Experiments] = Field(
+    experiments: List[LabelingExperiments] = Field(
         default_factory=list, description="Experimental setups"
     )
 
@@ -249,6 +321,7 @@ class FluxomicsDataModel(BaseModel):
         extra = "forbid"
 
     def __init__(self, **data):
+        """Initialise and validate experiment cross-references."""
         super().__init__(**data)
         self._validate_experiments_references()
 
@@ -310,38 +383,85 @@ class FluxomicsDataModel(BaseModel):
         """Get all experiment names."""
         return frozenset(exp.name for exp in self.experiments)
 
-    def get_experiments(self, name: str) -> Optional[Experiments]:
+    def get_experiments(self, name: str) -> Optional[LabelingExperiments]:
         """Get experiments by name."""
         for exp in self.experiments:
             if exp.name == name:
                 return exp
         return None
 
-    def to_jax_representation(self) -> Dict[str, Any]:
-        """
-        Convert to JAX-compatible dictionary representation.
+    def to_jax_representation(
+        self, experiment_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Convert to a JAX-compatible dictionary for numerical computation.
+
+        Metabolite and reaction IDs are returned in stable insertion order
+        (matching the rows/columns of the stoichiometric matrix).  When the
+        model contains more than one experiment, ``experiment_name`` must be
+        provided so that the correct flux and pool-size bounds are used.
+
+        Args:
+            experiment_name: Name of the experiment whose simulation bounds
+                should be included.  Required when the model contains more
+                than one experiment.  If the model has exactly one experiment
+                and this argument is ``None``, that experiment is used
+                automatically.  If the model has no experiments, bounds
+                default to ``[-inf, inf]`` for fluxes and ``[0, inf]`` for
+                pool sizes.
 
         Returns:
-            Dictionary with JAX arrays for numerical computations
+            Dictionary with the following keys:
+
+            - ``"stoichiometric_matrix"``: JAX array of shape
+              ``(n_metabolites, n_reactions)``
+            - ``"flux_bounds"``: JAX array of shape ``(n_reactions, 2)``
+            - ``"metabolitesize_bounds"``: JAX array of shape
+              ``(n_metabolites, 2)``
+            - ``"metabolite_ids"``: ordered list of metabolite ID strings
+            - ``"reaction_ids"``: ordered list of reaction ID strings
+            - ``"n_metabolites"``: int
+            - ``"n_reactions"``: int
+            - ``"n_experiments"``: int
+
+        Raises:
+            ValueError: If the model has more than one experiment and
+                ``experiment_name`` is not provided, or if
+                ``experiment_name`` does not match any experiment.
         """
-        metabolite_ids = list(self.metabolite_ids)
-        reaction_ids = list(self.reaction_ids)
+        # Use insertion-ordered lists for deterministic matrix indexing.
+        metabolite_ids = self.model.ordered_metabolite_ids
+        reaction_ids = self.model.ordered_reaction_ids
 
         # Get stoichiometric matrix
         S = self.model.get_stoichiometric_matrix()
 
-        # Get bounds matrices from first experiment (if available)
+        # Resolve which experiment supplies the simulation bounds.
+        experiment = None
+        if experiment_name is not None:
+            experiment = self.get_experiments(experiment_name)
+            if experiment is None:
+                raise ValueError(
+                    f"Experiment '{experiment_name}' not found. "
+                    f"Available: {sorted(self.experiments_names)}"
+                )
+        elif len(self.experiments) == 1:
+            experiment = self.experiments[0]
+        elif len(self.experiments) > 1:
+            raise ValueError(
+                f"Model has {len(self.experiments)} experiments. "
+                f"Provide experiment_name to select one. "
+                f"Available: {sorted(self.experiments_names)}"
+            )
+
         flux_bounds = None
         metabolitesize_bounds = None
 
-        if self.experiments:
-            experiment = self.experiments[0]
-            if experiment.simulation:
-                flux_bounds, metabolitesize_bounds = (
-                    experiment.simulation.get_optimization_bounds(
-                        reaction_ids, metabolite_ids
-                    )
+        if experiment and experiment.simulation:
+            flux_bounds, metabolitesize_bounds = (
+                experiment.simulation.get_optimization_bounds(
+                    reaction_ids, metabolite_ids
                 )
+            )
 
         if flux_bounds is None:
             flux_bounds = jnp.array([[-jnp.inf, jnp.inf]] * len(reaction_ids))
@@ -364,8 +484,7 @@ class FluxomicsDataModel(BaseModel):
     def get_tracer_experiment_data(
         self, experiments_name: str
     ) -> Optional[Dict[str, Any]]:
-        """
-        Get tracer experiment data for a specific experiment.
+        """Get tracer experiment data for a specific experiment.
 
         Returns:
             Dictionary with JAX arrays for tracer experiment analysis
@@ -374,7 +493,8 @@ class FluxomicsDataModel(BaseModel):
         if not experiment:
             return None
 
-        metabolite_ids = list(self.metabolite_ids)
+        # Use insertion-ordered list for deterministic matrix indexing.
+        metabolite_ids = self.model.ordered_metabolite_ids
 
         # Get tracer composition matrix
         tracer_matrix = experiment.get_tracer_composition_matrix(metabolite_ids)
@@ -400,27 +520,25 @@ class FluxomicsDataModel(BaseModel):
         }
 
     def __repr__(self) -> str:
-        """
-        Return a summary of the data model including Metadata and Stats.
-        """
-        lines = ["Fluxomics Data Model Summary", "=" * 30, ""]
+        """Return a summary of the data model including Metadata and Stats."""
+        lines = ["Fluxomics Data Converter Summary", "=" * 30, ""]
 
         # Metadata table
-        if self.info:
+        if self.metadata:
             lines.append("Model Information:")
             lines.append("-" * 18)
             info_items = [
-                ("Name", self.info.name),
-                ("Version", self.info.version),
+                ("Name", self.metadata.name),
+                ("Version", self.metadata.version),
                 (
                     "Date",
-                    self.info.date.strftime("%Y-%m-%d %H:%M:%S")
-                    if self.info.date
+                    self.metadata.date.strftime("%Y-%m-%d %H:%M:%S")
+                    if self.metadata.date
                     else None,
                 ),
-                ("Comment", self.info.comment),
-                ("Modeler", self.info.modeler),
-                ("Strain", self.info.strain),
+                ("Comment", self.metadata.comment),
+                ("Modeler", self.metadata.modeler),
+                ("Strain", self.metadata.strain),
             ]
 
             max_key_len = max(len(key) for key, _ in info_items)

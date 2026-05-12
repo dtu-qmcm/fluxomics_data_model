@@ -1,5 +1,14 @@
-"""
-FluxML metabolite definitions.
+"""FluxML metabolite (pool) definitions.
+
+Each metabolite in a FluxML model is represented as a pool element with an
+optional number of labelling positions (``atoms``), an optional chemical
+formula, compartment, and annotations.
+
+The :data:`ELEMENTS_AND_MOLECULAR_WEIGHTS` dictionary covers all 109 elements
+from hydrogen (H) to ununhexium (Uuh) and is used by the ``molecular_weight``
+computed property to derive the molecular weight from the chemical formula.
+
+Corresponds to ``fluxml/reactionnetwork/metabolitepools/pool``.
 """
 
 from typing import Optional, List
@@ -129,8 +138,7 @@ ELEMENTS_AND_MOLECULAR_WEIGHTS = {
 
 
 class Metabolite(BaseModel):
-    """
-    FluxML metabolite definition.
+    """FluxML metabolite definition.
 
     Corresponds to fluxml/reactionnetwork/metabolites/metabolite
     """

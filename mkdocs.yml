@@ -1,4 +1,4 @@
-site_name: Fluxomics Data Model
+site_name: Fluxomics Data Converter
 site_description: Universal format converter for 13C-MFA data
 use_directory_urls: False
 theme:
@@ -6,16 +6,16 @@ theme:
   features:
     - content.code.copy
     - navigation.sections
-repo_url: https://github.com/dtu-qmcm/fluxomics_data_model
+repo_url: https://github.com/dtu-qmcm/fluxomics_data_converter
 plugins:
   - search
   - mkdocstrings:
       handlers:
         python:
-          paths: [src/fluxomics_data_model]
+          paths: [src/fluxomics_data_converter]
           options:
             show_bases: false
-            docstring_style: sphinx
+            docstring_style: google
             members_order: source
             group_by_category: false
             filters: ["!^_"]

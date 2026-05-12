@@ -1,5 +1,28 @@
-"""
-FluxML tracer and label composition definitions.
+"""FluxML tracer and isotope label composition definitions.
+
+A *tracer* specifies the isotopically labelled substrate fed to the cell in
+a ¹³C MFA experiment.  The two classes here map to the FluxML
+``<input>`` element:
+
+- :class:`LabelComposition` — one ``<label>`` entry: a specific isotopomer
+  pattern (e.g. ``"111111"`` for uniformly labelled glucose), its fractional
+  abundance in the tracer mixture, and optional purity and cost metadata.
+- :class:`Tracers` — the full ``<input>`` block for one substrate pool:
+  a list of :class:`LabelComposition` entries plus the metabolite ID,
+  tracer type (``"isotopomer"``, ``"cumomer"``, or ``"emu"``), and an
+  optional time-varying labelling profile.
+
+JAX integration
+---------------
+Call :meth:`Tracers.with_composition` to attach a pre-computed composition
+vector (a JAX array) and :meth:`Tracers.with_time_profile` to attach
+time-course data.  These methods return new immutable instances; the
+original object is unchanged.
+
+Note: :attr:`Tracers.composition_vector` currently returns a placeholder
+``jnp.array([1.0])`` when no composition array has been explicitly attached
+via :meth:`with_composition`.  Numerical code that needs the actual isotopomer
+fractions must call :meth:`with_composition` first.
 """
 
 from typing import Optional, List
@@ -9,8 +32,7 @@ from ..core.common import TextualOrMath, JAXArray, TimeSeries
 
 
 class LabelComposition(BaseModel):
-    """
-    FluxML isotope label composition specification.
+    """FluxML isotope label composition specification.
 
     Corresponds to fluxml/experiments/tracers/label
     """
@@ -61,8 +83,7 @@ class LabelComposition(BaseModel):
 
 
 class Tracers(BaseModel):
-    """
-    FluxML tracer specification for tracer experiments.
+    """FluxML tracer specification for tracer experiments.
 
     Corresponds to fluxml/experiments/tracers
     """
@@ -124,14 +145,58 @@ class Tracers(BaseModel):
 
     @property
     def composition_vector(self) -> jnp.ndarray:
-        """Get JAX array representation of tracer composition."""
-        if self.composition_array is None:
-            # Default: create composition from labels
-            if not self.labels:
-                return jnp.array([1.0])  # Unlabeled
-            # Simple implementation - would need full label parsing
-            return jnp.array([1.0])
-        return self.composition_array.to_jax_array()
+        """Return the tracer composition as a JAX array.
+
+        Resolution order:
+
+        1. If a composition array has been explicitly attached via
+           :meth:`with_composition`, that array is returned unchanged.
+        2. Otherwise, the vector is derived from ``self.labels``:
+           each :class:`LabelComposition` whose ``fraction`` field is a
+           plain ``float`` contributes one element.  The resulting vector
+           contains those fractions in the order the labels appear.
+        3. If no labels are defined, or none carry a numeric ``fraction``
+           (e.g. all labels use time-varying ``expression`` values), a
+           fallback of ``jnp.array([1.0])`` is returned, representing a
+           fully unlabelled substrate.
+
+        Examples::
+
+            # Labels with fractions → vector built from labels
+            t = Tracers(
+                metabolite="Glc",
+                labels=[
+                    LabelComposition(labeled_pattern="111111", fraction=0.2),
+                    LabelComposition(labeled_pattern="000000", fraction=0.8),
+                ],
+            )
+            t.composition_vector  # jnp.array([0.2, 0.8])
+
+            # Explicitly set vector takes priority
+            t2 = t.with_composition(jnp.array([0.5, 0.5]))
+            t2.composition_vector  # jnp.array([0.5, 0.5])
+
+            # No labels → fallback
+            Tracers(metabolite="Glc").composition_vector  # jnp.array([1.0])
+
+        Returns:
+            1-D JAX array of fractional abundances.
+        """
+        if self.composition_array is not None:
+            return self.composition_array.to_jax_array()
+
+        # Derive from labels: collect numeric fractions in order.
+        fractions = [
+            label.fraction
+            for label in self.labels
+            if label.fraction is not None and isinstance(label.fraction, float)
+        ]
+
+        if fractions:
+            return jnp.array(fractions)
+
+        # Fallback: no labels, or all labels use expression-only profiles.
+        return jnp.array([1.0])
 
     def with_composition(self, composition: jnp.ndarray) -> "Tracers":
         """Create new tracer with specified composition."""

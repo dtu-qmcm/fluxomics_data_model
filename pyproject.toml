@@ -1,17 +1,15 @@
 [project]
-name = "fluxomics-data-model"
+name = "fluxomics-data-converter"
 version = "0.1.0"
-description = "A library specifying a format for fluxomics data"
+description = "A Python library for converting fluxomics data"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "jax>=0.4.23",
     "jaxlib>=0.4.23",
-    "matplotlib>=3.10.1",
     "pandas>=2.2.3",
     "pydantic>=2.10.4",
     "sbmlmath>=0.4.0",
-    "seaborn>=0.13.2",
     "sympy>=1.13.3",
 ]
 authors = [
@@ -33,11 +31,33 @@ extend-exclude = ["data"]
 line-length = 80
 
 [tool.ruff.lint]
-ignore = ["F722"]
-extend-select = ["E501"]  # line length is checked
+# F722  – forward annotation syntax (suppressed for Pydantic compat)
+# D106  – undocumented nested class (fires on every Pydantic `Config` inner
+#          class; those are boilerplate and should not require a docstring)
+ignore = ["F722", "D106"]
+
+extend-select = [
+    "E501",  # line length is checked
+    "D",     # pydocstyle – enforces Google-style docstring conventions
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore all directories named `tests`.
+"tests/**" = ["D"]
+# Ignore all files that end in `_test.py`.
+"*_test.py" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+# "google" activates the canonical Google-style rule subset:
+#   - Requires summary on the first line (D212), not the second (D213)
+#   - Requires imperative mood (D401) is disabled for Google convention
+#   - Blank line after last section (D413) is disabled for Google convention
+#   - One-line docstrings must fit on one line (D200)
+#   - First line must end with a period/question mark/exclamation (D415)
+convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["fluxomics_data_model"]
+known-first-party = ["fluxomics_data_converter"]
 
 [dependency-groups]
 dev = [

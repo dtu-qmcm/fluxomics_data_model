@@ -1,5 +1,18 @@
-"""
-FluxML simulation definitions.
+"""FluxML simulation variable definitions (``<simulation>`` element).
+
+The simulation section of a FluxML configuration specifies the free
+parameters of the stoichiometric system — i.e. the subset of flux values
+and metabolite pool sizes that are treated as optimisation variables —
+together with their initial values and bounds.
+
+Classes
+-------
+- :class:`FluxValue`           — one ``<fluxvalue>`` entry (net or exchange)
+- :class:`MetaboliteSizeValue` — one ``<poolsizevalue>`` entry
+- :class:`Variables`           — container validating unique IDs
+- :class:`Simulation`          — the full ``<simulation>`` block
+
+Corresponds to ``fluxml/configuration/simulation``.
 """
 
 from typing import Optional, List
@@ -9,8 +22,7 @@ from ..experiment.measurement import MeasurementModel
 
 
 class FluxValue(BaseModel):
-    """
-    FluxML flux value specification for simulation.
+    """FluxML flux value specification for simulation.
 
     Corresponds to fluxml/experiments/simulation/variables/fluxvalue
     """
@@ -43,8 +55,7 @@ class FluxValue(BaseModel):
 
 
 class MetaboliteSizeValue(BaseModel):
-    """
-    FluxML metabolite size value specification for simulation.
+    """FluxML metabolite size value specification for simulation.
 
     Corresponds to fluxml/experiments/simulation/variables/metabolitesizevalue
     """
@@ -82,8 +93,7 @@ class MetaboliteSizeValue(BaseModel):
 
 
 class Variables(BaseModel):
-    """
-    FluxML simulation variables.
+    """FluxML simulation variables.
 
     Corresponds to fluxml/experiments/simulation/variables
     """
@@ -122,8 +132,7 @@ class Variables(BaseModel):
         return v
 
     def get_flux_bounds_matrix(self, flux_ids: List[str]) -> jnp.ndarray:
-        """
-        Get flux bounds matrix for JAX computations.
+        """Get flux bounds matrix for JAX computations.
 
         Returns:
             JAX array of shape (n_fluxes, 2) with [lower, upper] bounds
@@ -149,8 +158,7 @@ class Variables(BaseModel):
     def get_metabolitesize_bounds_matrix(
         self, metabolite_ids: List[str]
     ) -> jnp.ndarray:
-        """
-        Get metabolite size bounds matrix for JAX computations.
+        """Get metabolite size bounds matrix for JAX computations.
 
         Returns:
             JAX array of shape (n_metabolites, 2) with [lower, upper] bounds
@@ -172,8 +180,7 @@ class Variables(BaseModel):
 
 
 class Simulation(BaseModel):
-    """
-    FluxML simulation specification.
+    """FluxML simulation specification.
 
     Corresponds to fluxml/experiments/simulation
     """
@@ -194,8 +201,7 @@ class Simulation(BaseModel):
     def get_optimization_bounds(
         self, flux_ids: List[str], metabolite_ids: List[str]
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Get optimization bounds for JAX optimization.
+        """Get optimization bounds for JAX optimization.
 
         Returns:
             Tuple of (flux_bounds, metabolitesize_bounds) as JAX arrays

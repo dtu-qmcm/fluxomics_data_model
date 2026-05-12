@@ -1,6 +1,4 @@
-"""
-Output data models for FluxML.
-"""
+"""Output data models."""
 
 from .simulation import Simulation, Variables, FluxValue, MetaboliteSizeValue
 

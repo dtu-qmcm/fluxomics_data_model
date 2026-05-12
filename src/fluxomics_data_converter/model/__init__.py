@@ -1,14 +1,13 @@
-"""
-FluxML data models package.
+"""fluxomics data models package.
 
 Contains Pydantic models that correspond to FluxML schema elements,
 designed for JAX compatibility.
 """
 
-from ..core.core import FluxomicsDataModel, Metadata, Model
+from ..core.core import FluxomicsData, Metadata, MetabolicNetworkModel
 from .metabolite import Metabolite
 from .reaction import Reaction
-from .atom_mapping import AtomMapping, AtomMap, AtomAddress
+from .atom_mapping import AtomTransition, AtomMap, AtomAddress
 from ..experiment.measurement import (
     Measurement,
     MeasurementData,
@@ -35,17 +34,17 @@ from .constraint import (
     MetaboliteSizeConstraints,
 )
 from .constraint_eval import ConstraintEvaluator
-from ..core.core import Experiments
+from ..core.core import LabelingExperiments
 from ..experiment.tracer import Tracers, LabelComposition
 from ..core.common import Annotation, ErrorModel, TextualOrMath, DictList
 
 __all__ = [
-    "FluxomicsDataModel",
+    "FluxomicsData",
     "Metadata",
-    "Model",
+    "MetabolicNetworkModel",
     "Metabolite",
     "Reaction",
-    "AtomMapping",
+    "AtomTransition",
     "AtomMap",
     "AtomAddress",
     "Measurement",
@@ -68,7 +67,7 @@ __all__ = [
     "ExchangeConstraints",
     "MetaboliteSizeConstraints",
     "ConstraintEvaluator",
-    "Experiments",
+    "LabelingExperiments",
     "Tracers",
     "LabelComposition",
     "Annotation",

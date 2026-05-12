@@ -1,5 +1,16 @@
-"""
-FluxML reaction definitions.
+"""FluxML reaction definitions.
+
+Each reaction describes the transformation of one set of metabolites
+(reactants) into another (products).  Reactions can be reversible or
+irreversible, and may carry multiple atom-mapping variants when symmetric
+substrates create ambiguous carbon transitions (see :attr:`Reaction.atom_transition_ids`).
+
+The separator ``"___"`` (triple underscore) is a naming convention used
+throughout the library to distinguish variant reaction IDs from base IDs.
+For example, a reaction ``"SCS"`` with two symmetric variants is stored with
+``atom_transition_ids = ["SCS___1", "SCS___2"]``.
+
+Corresponds to ``fluxml/reactionnetwork/reaction``.
 """
 
 from typing import Optional, List, Dict
@@ -9,11 +20,10 @@ from ..core.common import Annotation, JAXArray
 
 
 class Reaction(BaseModel):
-    """
-    Represents a biochemical reaction in the metabolic network.
+    """Represents a biochemical reaction in the metabolic network.
 
     A reaction describes the transformation of reactants to products.
-    Reactions can have multiple atom mapping variants when symmetric
+    Reactions can have multiple atom transition variants when symmetric
     compounds create ambiguity in carbon atom transitions.
 
     Attributes:
@@ -24,7 +34,7 @@ class Reaction(BaseModel):
         annotations: Additional metadata annotations
         reactants: List of reactant metabolite IDs (in order)
         products: List of product metabolite IDs (in order)
-        atom_mapping_ids: Computational flux variable IDs for variants.
+        atom_transition_ids: Computational flux variable IDs for variants.
             None for single-map reactions, list of IDs for variant reactions.
             Example: ["bsDAP___1", "bsDAP___2", "bsDAP___3", "bsDAP___4"]
 
@@ -35,7 +45,7 @@ class Reaction(BaseModel):
         Reaction with 4 variants due to symmetric compounds:
             Reaction(id="bsDAP", reactants=["ASA", "PYR"],
                     products=["DAP", "H2O"],
-                    atom_mapping_ids=["bsDAP___1", "bsDAP___2",
+                    atom_transition_ids=["bsDAP___1", "bsDAP___2",
                                      "bsDAP___3", "bsDAP___4"])
     """
 
@@ -53,7 +63,7 @@ class Reaction(BaseModel):
     products: List[str] = Field(
         default_factory=list, description="Product metabolite IDs"
     )
-    atom_mapping_ids: Optional[List[str]] = Field(
+    atom_transition_ids: Optional[List[str]] = Field(
         default=None,
         description="Computational flux variable IDs for variants "
         "(e.g., ['SCS___1', 'SCS___2'])",
@@ -90,13 +100,13 @@ class Reaction(BaseModel):
     def is_variant_reaction(self) -> bool:
         """Check if this reaction has multiple atom map variants."""
         return (
-            self.atom_mapping_ids is not None and len(self.atom_mapping_ids) > 1
+            self.atom_transition_ids is not None and len(self.atom_transition_ids) > 1
         )
 
     @property
     def n_variants(self) -> int:
         """Number of atom map variants for this reaction."""
-        return len(self.atom_mapping_ids) if self.atom_mapping_ids else 1
+        return len(self.atom_transition_ids) if self.atom_transition_ids else 1
 
     @property
     def flux_bounds(self) -> jnp.ndarray:
@@ -117,26 +127,55 @@ class Reaction(BaseModel):
         return f"{reactants}{arrow}{products}"
 
     def with_flux_bounds(self, lower: float, upper: float) -> "Reaction":
-        """Create new reaction with specified flux bounds."""
+        """Return a copy of this reaction with new flux bounds.
+
+        All other fields — including ``atom_transition_ids``, stoichiometry,
+        annotations, and reversibility — are preserved unchanged.
+
+        Args:
+            lower: Lower bound for the net flux (e.g. 0.0 for irreversible,
+                -1000.0 for unconstrained reversible).
+            upper: Upper bound for the net flux (e.g. 1000.0).
+
+        Returns:
+            A new immutable ``Reaction`` with ``flux_bounds_array`` set to
+            ``[lower, upper]``.
+        """
         bounds_array = jnp.array([lower, upper])
         return Reaction(
             id=self.id,
+            name=self.name,
             reversibility=self.reversibility,
             annotations=self.annotations,
             reactants=self.reactants,
             products=self.products,
+            atom_transition_ids=self.atom_transition_ids,
             flux_bounds_array=JAXArray.from_jax_array(bounds_array),
             stoichiometry_dict=self.stoichiometry_dict,
         )
 
     def with_stoichiometry(self, stoichiometry: Dict[str, float]) -> "Reaction":
-        """Create new reaction with specified stoichiometry."""
+        """Return a copy of this reaction with an explicit stoichiometry dict.
+
+        All other fields — including ``atom_transition_ids``, flux bounds,
+        annotations, and reversibility — are preserved unchanged.
+
+        Args:
+            stoichiometry: Mapping of ``metabolite_id -> coefficient``.
+                Reactants should have negative coefficients, products
+                positive ones.
+
+        Returns:
+            A new immutable ``Reaction`` with ``stoichiometry_dict`` set.
+        """
         return Reaction(
             id=self.id,
+            name=self.name,
             reversibility=self.reversibility,
             annotations=self.annotations,
             reactants=self.reactants,
             products=self.products,
+            atom_transition_ids=self.atom_transition_ids,
             flux_bounds_array=self.flux_bounds_array,
             stoichiometry_dict=stoichiometry,
         )
@@ -144,8 +183,7 @@ class Reaction(BaseModel):
     def get_stoichiometric_vector(
         self, metabolite_ids: List[str]
     ) -> jnp.ndarray:
-        """
-        Get stoichiometric vector for this reaction.
+        """Get stoichiometric vector for this reaction.
 
         Args:
             metabolite_ids: Ordered list of metabolite IDs

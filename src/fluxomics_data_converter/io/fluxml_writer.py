@@ -1,5 +1,4 @@
-"""
-FluxML XML writer for writing FluxML files.
+"""FluxML XML writer for writing FluxML files.
 
 FluxML is an XML-based format used by 13CFlux/13CFlux2 for 13C metabolic
 flux analysis.
@@ -11,23 +10,45 @@ from typing import Optional, Dict
 from datetime import datetime
 from pathlib import Path
 
-from ..core.core import FluxomicsDataModel, Experiments
-from ..model.atom_mapping import AtomMapping
+from ..core.core import FluxomicsData, LabelingExperiments
+from ..model.atom_mapping import AtomTransition
 
 
 class FluxMLWriter:
-    """Writer for FluxML XML files."""
+    """Serialiser for FluxML XML files (13CFlux2 format).
+
+    Converts a :class:`~fluxomics_data_converter.FluxomicsData` into a
+    pretty-printed UTF-8 XML file.
+
+    Known limitations
+    -----------------
+    - Named constraints (``"name: expression"``) lose their name prefix on
+      write; only the expression is emitted.
+    - Experiment-level ``<constraints>`` sections are not written.
+    - ``<variant>`` elements for scrambling reactions do not include their
+      ``ratio`` / weight attributes.
+    - Tracer ``type`` is always written as ``"isotopomer"``; the actual
+      ``Tracers.type`` field value is ignored.
+
+    Example::
+
+        writer = FluxMLWriter()
+        writer.write(model, "output/ecoli.fml")
+        # or use the convenience function:
+        from fluxomics_data_converter.io import write_fluxml
+        write_fluxml(model, "output/ecoli.fml")
+    """
 
     NAMESPACE = "http://www.13cflux.net/fluxml"
 
     def __init__(self):
-        self._model: Optional[FluxomicsDataModel] = None
+        """Initialise the writer with empty state; call write() to serialise."""
+        self._model: Optional[FluxomicsData] = None
         self._ns = self.NAMESPACE
         self._metabolite_atom_counts: Dict[str, int] = {}
 
     def _compute_metabolite_atom_counts(self) -> Dict[str, int]:
-        """
-        Compute atom counts for metabolites by scanning atom mappings.
+        """Compute atom counts for metabolites by scanning atom transitions.
 
         Returns a dict mapping metabolite id to atom count.
         """
@@ -65,14 +86,13 @@ class FluxMLWriter:
 
     def write(
         self,
-        model: FluxomicsDataModel,
+        model: FluxomicsData,
         filepath: str,
     ) -> None:
-        """
-        Write FluxomicsDataModel to a FluxML file.
+        """Write FluxomicsData to a FluxML file.
 
         Args:
-            model: FluxomicsDataModel to write
+            model: FluxomicsData to write
             filepath: Path to output file
         """
         self._model = model
@@ -112,8 +132,8 @@ class FluxMLWriter:
         root = ET.Element("fluxml")
         root.set("xmlns", self.NAMESPACE)
 
-        # Add info section
-        self._add_info(root)
+        # Add metadata section
+        self._add_metadata(root)
 
         # Add reaction network
         self._add_reaction_network(root)
@@ -126,38 +146,38 @@ class FluxMLWriter:
 
         return root
 
-    def _add_info(self, root: ET.Element) -> None:
-        """Add info element with metadata."""
-        if not self._model.info:
+    def _add_metadata(self, root: ET.Element) -> None:
+        """Add metadata element with metadata."""
+        if not self._model.metadata:
             return
 
-        info = ET.SubElement(root, "info")
+        metadata = ET.SubElement(root, "info")
 
-        if self._model.info.date:
-            date_elem = ET.SubElement(info, "date")
-            date_elem.text = self._model.info.date.strftime("%Y-%m-%d %H:%M:%S")
+        if self._model.metadata.date:
+            date_elem = ET.SubElement(metadata, "date")
+            date_elem.text = self._model.metadata.date.strftime("%Y-%m-%d %H:%M:%S")
         else:
             # Add current timestamp
-            date_elem = ET.SubElement(info, "date")
+            date_elem = ET.SubElement(metadata, "date")
             date_elem.text = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        if self._model.info.comment:
-            comment_elem = ET.SubElement(info, "comment")
-            comment_elem.text = self._model.info.comment
+        if self._model.metadata.comment:
+            comment_elem = ET.SubElement(metadata, "comment")
+            comment_elem.text = self._model.metadata.comment
 
-        if self._model.info.modeler:
-            modeler_elem = ET.SubElement(info, "modeler")
-            modeler_elem.text = self._model.info.modeler
+        if self._model.metadata.modeler:
+            modeler_elem = ET.SubElement(metadata, "modeler")
+            modeler_elem.text = self._model.metadata.modeler
 
-        if self._model.info.strain:
-            strain_elem = ET.SubElement(info, "strain")
-            strain_elem.text = self._model.info.strain
+        if self._model.metadata.strain:
+            strain_elem = ET.SubElement(metadata, "strain")
+            strain_elem.text = self._model.metadata.strain
 
     def _add_reaction_network(self, root: ET.Element) -> None:
         """Add reactionnetwork element."""
         rn = ET.SubElement(root, "reactionnetwork")
 
-        # Compute atom counts from atom mappings for metabolites
+        # Compute atom counts from atom transitions for metabolites
         # missing this info
         self._metabolite_atom_counts = self._compute_metabolite_atom_counts()
 
@@ -168,7 +188,7 @@ class FluxMLWriter:
             pool.set("id", metabolite.id)
 
             # Use metabolite.atoms if available, otherwise infer from
-            # atom mappings
+            # atom transitions
             atom_count = metabolite.atoms
             if not atom_count:
                 atom_count = self._metabolite_atom_counts.get(metabolite.id)
@@ -187,14 +207,45 @@ class FluxMLWriter:
         for reaction in self._model.model.reactions:
             self._add_reaction(rn, reaction)
 
+        # Add drain reactions for sink metabolites (produced but never consumed).
+        # 13CFlux2 / x3cflux requires every output metabolite to have an explicit
+        # sink reaction so the network can be validated as structurally consistent.
+        consumed: set = set()
+        produced: set = set()
+        for rxn in self._model.model.reactions:
+            consumed.update(rxn.reactants)
+            produced.update(rxn.products)
+        input_pools = {
+            tracer.metabolite
+            for exp in self._model.experiments
+            for tracer in exp.tracers
+        }
+        for metab_id in sorted(produced - consumed - input_pools):
+            drain = ET.SubElement(rn, "reaction")
+            drain.set("id", f"{metab_id}_out")
+            drain.set("bidirectional", "false")
+            reduct = ET.SubElement(drain, "reduct")
+            reduct.set("id", metab_id)
+            atom_count = self._metabolite_atom_counts.get(metab_id)
+            if not atom_count:
+                m = next(
+                    (m for m in self._model.model.metabolites if m.id == metab_id),
+                    None,
+                )
+                if m:
+                    atom_count = m.atoms
+            if atom_count:
+                cfg = " ".join(f"C#{i}@1" for i in range(1, atom_count + 1))
+                reduct.set("cfg", cfg)
+
     def _add_reaction(self, rn: ET.Element, reaction) -> None:
         """Add a single reaction element."""
         rxn = ET.SubElement(rn, "reaction")
 
         # Handle variant reactions
-        if reaction.atom_mapping_ids and len(reaction.atom_mapping_ids) > 1:
+        if reaction.atom_transition_ids and len(reaction.atom_transition_ids) > 1:
             # Multiple variants - use space-separated IDs
-            rxn.set("id", " ".join(reaction.atom_mapping_ids))
+            rxn.set("id", " ".join(reaction.atom_transition_ids))
         else:
             rxn.set("id", reaction.id)
 
@@ -210,7 +261,7 @@ class FluxMLWriter:
                 if ann.content:
                     ann_elem.text = ann.content
 
-        # Get atom mapping if exists
+        # Get atom transition if exists
         atom_mapping = self._model.model.atom_mappings.get(reaction.id)
 
         # Add reactants
@@ -218,7 +269,7 @@ class FluxMLWriter:
             reduct = ET.SubElement(rxn, "reduct")
             reduct.set("id", reactant_id)
 
-            # Add cfg if atom mapping exists
+            # Add cfg if atom transition exists
             if atom_mapping:
                 cfg = self._build_reactant_cfg(atom_mapping, reactant_id, i)
                 if cfg:
@@ -249,7 +300,7 @@ class FluxMLWriter:
 
     def _build_reactant_cfg(
         self,
-        atom_mapping: AtomMapping,
+        atom_mapping: AtomTransition,
         cpd_id: str,
         position: int,
     ) -> Optional[str]:
@@ -301,7 +352,7 @@ class FluxMLWriter:
 
     def _build_product_cfg(
         self,
-        atom_mapping: AtomMapping,
+        atom_mapping: AtomTransition,
         cpd_id: str,
         position: int,
         atom_map_id: Optional[str] = None,
@@ -364,7 +415,7 @@ class FluxMLWriter:
     def _add_product_variants(
         self,
         rproduct: ET.Element,
-        atom_mapping: AtomMapping,
+        atom_mapping: AtomTransition,
         cpd_id: str,
         position: int,
     ) -> None:
@@ -430,7 +481,7 @@ class FluxMLWriter:
             self._add_experiment(root, experiment)
 
     def _add_experiment(
-        self, root: ET.Element, experiment: Experiments
+        self, root: ET.Element, experiment: LabelingExperiments
     ) -> None:
         """Add a single configuration/experiment element."""
         config = ET.SubElement(root, "configuration")
@@ -448,6 +499,30 @@ class FluxMLWriter:
         if experiment.measurement:
             self._add_measurement(config, experiment)
 
+        # Add simulation section
+        if experiment.simulation:
+            self._add_simulation(config, experiment)
+
+    def _add_simulation(
+        self, config: ET.Element, experiment: LabelingExperiments
+    ) -> None:
+        """Add simulation element with flux and pool-size initial values."""
+        sim = ET.SubElement(config, "simulation")
+        sim.set("method", "auto")
+        sim.set("type", "full")
+
+        variables = ET.SubElement(sim, "variables")
+        for fv in experiment.simulation.variables.flux_values:
+            fv_elem = ET.SubElement(variables, "fluxvalue")
+            fv_elem.set("flux", fv.flux)
+            fv_elem.set("type", fv.type or "net")
+            fv_elem.text = str(fv.value)
+
+        for pv in experiment.simulation.variables.metabolitesize_values:
+            pv_elem = ET.SubElement(variables, "poolvalue")
+            pv_elem.set("pool", pv.metabolite)
+            pv_elem.text = str(pv.value)
+
     def _add_tracer_input(self, config: ET.Element, tracer) -> None:
         """Add input element for tracer specification."""
         input_elem = ET.SubElement(config, "input")
@@ -462,7 +537,7 @@ class FluxMLWriter:
             label_elem.text = str(label.fraction)
 
     def _add_measurement(
-        self, config: ET.Element, experiment: Experiments
+        self, config: ET.Element, experiment: LabelingExperiments
     ) -> None:
         """Add measurement section to configuration."""
         meas_elem = ET.SubElement(config, "measurement")
@@ -569,14 +644,13 @@ class FluxMLWriter:
 
 
 def write_fluxml(
-    model: FluxomicsDataModel,
+    model: FluxomicsData,
     filepath: str,
 ) -> None:
-    """
-    Convenience function to write FluxomicsDataModel to a FluxML file.
+    """Convenience function to write FluxomicsData to a FluxML file.
 
     Args:
-        model: FluxomicsDataModel to write
+        model: FluxomicsData to write
         filepath: Path to output file
     """
     writer = FluxMLWriter()

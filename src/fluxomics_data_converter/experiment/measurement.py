@@ -1,5 +1,29 @@
-"""
-FluxML measurement definitions.
+"""Measurement model and data definitions.
+
+This module mirrors the ``<measurement>`` element of a FluxML
+``<configuration>`` block.  It is split into two orthogonal parts that
+FluxML keeps deliberately separate:
+
+**Measurement** (what was measured and how)
+    - :class:`Group`               — one labelling measurement group (MS fragment)
+    - :class:`NetFlux`             — a net flux measurement specification
+    - :class:`ExchangeFlux`        — an exchange flux measurement specification
+    - :class:`MetaboliteSize`      — a pool-size measurement specification
+    - :class:`LabelingMeasurement` — collection of labelling groups
+    - :class:`FluxMeasurement`     — collection of net + exchange flux specs
+    - :class:`MetaboliteSizeMeasurement` — collection of pool-size specs
+    - :class:`MeasurementModel`    — top-level container for all spec types
+
+**Data** (the actual measured values)
+    - :class:`Datum`               — a single measured value with std-dev
+    - :class:`MeasurementData`     — collection of ``Datum`` objects with
+      JAX array views
+
+**Combined**
+    - :class:`Measurement`         — pairs a :class:`MeasurementModel` with
+      :class:`MeasurementData`
+
+Corresponds to ``fluxml/configuration/measurement``.
 """
 
 from typing import Optional, List, Dict, Literal
@@ -9,8 +33,7 @@ from ..core.common import TextualOrMath, ErrorModel, JAXArray, TimeSeries
 
 
 class Group(BaseModel):
-    """
-    FluxML measurement group for mass spectrometry data.
+    """FluxML measurement group for mass spectrometry data.
 
     Corresponds to fluxml/experiments/measurement/model/
     labelingmeasurement/group
@@ -51,8 +74,7 @@ class Group(BaseModel):
 
 
 class NetFlux(BaseModel):
-    """
-    FluxML net flux measurement.
+    """FluxML net flux measurement.
 
     Corresponds to fluxml/experiments/measurement/model/
     fluxmeasurement/netflux
@@ -70,8 +92,7 @@ class NetFlux(BaseModel):
 
 
 class ExchangeFlux(BaseModel):
-    """
-    FluxML exchange flux measurement.
+    """FluxML exchange flux measurement.
 
     Corresponds to fluxml/experiments/measurement/model/
     fluxmeasurement/xchflux
@@ -89,8 +110,7 @@ class ExchangeFlux(BaseModel):
 
 
 class MetaboliteSize(BaseModel):
-    """
-    FluxML metabolite size measurement.
+    """FluxML metabolite size measurement.
 
     Corresponds to fluxml/experiments/measurement/model/
     metabolitesizemeasurement/metabolitesize
@@ -108,8 +128,7 @@ class MetaboliteSize(BaseModel):
 
 
 class LabelingMeasurement(BaseModel):
-    """
-    FluxML labeling measurement collection.
+    """FluxML labeling measurement collection.
 
     Corresponds to fluxml/experiments/measurement/model/labelingmeasurement
     """
@@ -133,8 +152,7 @@ class LabelingMeasurement(BaseModel):
 
 
 class FluxMeasurement(BaseModel):
-    """
-    FluxML flux measurement collection.
+    """FluxML flux measurement collection.
 
     Corresponds to fluxml/experiments/measurement/model/fluxmeasurement
     """
@@ -152,8 +170,7 @@ class FluxMeasurement(BaseModel):
 
 
 class MetaboliteSizeMeasurement(BaseModel):
-    """
-    FluxML metabolite size measurement collection.
+    """FluxML metabolite size measurement collection.
 
     Corresponds to fluxml/experiments/measurement/model/
     metabolitesizemeasurement
@@ -169,8 +186,7 @@ class MetaboliteSizeMeasurement(BaseModel):
 
 
 class MeasurementModel(BaseModel):
-    """
-    FluxML measurement model.
+    """FluxML measurement model.
 
     Corresponds to fluxml/experiments/measurement/model
     """
@@ -191,8 +207,7 @@ class MeasurementModel(BaseModel):
 
 
 class Datum(BaseModel):
-    """
-    FluxML measurement datum.
+    """FluxML measurement datum.
 
     Corresponds to fluxml/experiments/measurement/data/datum
     """
@@ -220,8 +235,7 @@ class Datum(BaseModel):
 
 
 class MeasurementData(BaseModel):
-    """
-    FluxML measurement data collection.
+    """FluxML measurement data collection.
 
     Corresponds to fluxml/experiments/measurement/data
     """
@@ -294,8 +308,7 @@ class MeasurementData(BaseModel):
 
 
 class Measurement(BaseModel):
-    """
-    FluxML measurement specification.
+    """FluxML measurement specification.
 
     Corresponds to fluxml/experiments/measurement
     """

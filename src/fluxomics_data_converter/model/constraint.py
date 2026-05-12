@@ -1,15 +1,28 @@
-"""
-FluxML constraint definitions.
+"""FluxML constraint definitions.
+
+The three concrete constraint classes (:class:`NetConstraints`,
+:class:`ExchangeConstraints`, :class:`MetaboliteSizeConstraints`) are
+structurally identical — each holds a list of
+:class:`ConstraintFormula` objects and produces a human-readable
+``summary()``.  To avoid repeating the same body three times, the shared
+behaviour lives in the private :class:`_ConstraintsMixin`.
+
+Hierarchy::
+
+    _ConstraintsMixin          ← shared summary() logic
+        NetConstraints
+        ExchangeConstraints
+        MetaboliteSizeConstraints
+    Constraints                ← container for all three
 """
 
-from typing import Optional, List, Tuple, Any
+from typing import ClassVar, Optional, List, Tuple, Any
 from pydantic import BaseModel, Field, ConfigDict
 import sympy as sp
 
 
 class ConstraintFormula(BaseModel):
-    """
-    A single constraint formula.
+    """A single constraint formula.
 
     Can be either a textual mathematical expression or MathML.
     Textual format examples:
@@ -40,8 +53,7 @@ class ConstraintFormula(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     def parse_sympy(self) -> Tuple[Any, str, Any]:
-        """
-        Parse expression into SymPy components.
+        """Parse expression into SymPy components.
 
         Returns:
             Tuple of (lhs_expr, operator, rhs_expr) where lhs_expr and rhs_expr
@@ -79,8 +91,7 @@ class ConstraintFormula(BaseModel):
         return lhs_expr, operator, rhs_expr
 
     def get_variable_names(self) -> set[str]:
-        """
-        Extract all variable names from the constraint expression.
+        """Extract all variable names from the constraint expression.
 
         Returns:
             Set of variable names (reaction IDs, metabolite IDs, or parameters)
@@ -103,15 +114,74 @@ class ConstraintFormula(BaseModel):
         return self.expression
 
 
-class NetConstraints(BaseModel):
-    """
-    FluxML net flux constraints.
+class _ConstraintsMixin:
+    """Shared ``summary()`` implementation for single-type constraint classes.
 
-    Net constraints apply to net fluxes (forward - reverse) through reactions.
-    They typically bound or fix the flux through specific reactions.
-
-    Corresponds to fluxml/constraints/net
+    Each concrete subclass holds a ``formulas`` list and a ``_label`` class
+    variable that names the constraint type (e.g. ``"Net"``).  This mixin
+    provides a single, tested implementation of ``summary()`` so that
+    :class:`NetConstraints`, :class:`ExchangeConstraints`, and
+    :class:`MetaboliteSizeConstraints` do not duplicate the same body.
     """
+
+    # Subclasses must declare these at class level:
+    #   formulas: List[ConstraintFormula]
+    #   _label:   ClassVar[str]
+
+    _label: ClassVar[str] = "Constraint"  # overridden in each subclass
+
+    def summary(self) -> str:
+        """Return a human-readable summary of this constraint group.
+
+        Counts equalities (``=``), lower-bound inequalities (``>=``), and
+        upper-bound inequalities (``<=``), then lists up to five sample
+        formulas.
+
+        Returns:
+            Multi-line string with counts and sample formula expressions.
+        """
+        if not self.formulas:  # type: ignore[attr-defined]
+            return f"No {self._label.lower()} constraints"
+
+        formulas = self.formulas  # type: ignore[attr-defined]
+        lines = [f"{self._label} Constraints ({len(formulas)} formulas):"]
+
+        equalities = sum(
+            1
+            for f in formulas
+            if "=" in f.expression
+            and ">=" not in f.expression
+            and "<=" not in f.expression
+        )
+        inequalities_gte = sum(1 for f in formulas if ">=" in f.expression)
+        inequalities_lte = sum(1 for f in formulas if "<=" in f.expression)
+
+        lines.append(f"  Equalities (=): {equalities}")
+        lines.append(f"  Lower bounds (>=): {inequalities_gte}")
+        lines.append(f"  Upper bounds (<=): {inequalities_lte}")
+
+        if len(formulas) <= 5:
+            lines.append("  Formulas:")
+            for f in formulas:
+                lines.append(f"    - {str(f)}")
+        else:
+            lines.append("  Sample formulas:")
+            for f in formulas[:3]:
+                lines.append(f"    - {str(f)}")
+            lines.append(f"    ... and {len(formulas) - 3} more")
+
+        return "\n".join(lines)
+
+
+class NetConstraints(_ConstraintsMixin, BaseModel):
+    """Net flux constraints (``fluxml/constraints/net``).
+
+    Apply to the net flux through each reaction, defined as
+    ``forward_flux - reverse_flux``.  These typically fix or bound the
+    net throughput of specific reactions in the model.
+    """
+
+    _label: ClassVar[str] = "Net"
 
     formulas: List[ConstraintFormula] = Field(
         default_factory=list, description="List of net flux constraint formulas"
@@ -119,52 +189,16 @@ class NetConstraints(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    def summary(self) -> str:
-        """Generate a summary of net constraints."""
-        if not self.formulas:
-            return "No net constraints"
 
-        lines = [f"Net Constraints ({len(self.formulas)} formulas):"]
+class ExchangeConstraints(_ConstraintsMixin, BaseModel):
+    """Exchange flux constraints (``fluxml/constraints/xch``).
 
-        # Count constraint types
-        equalities = sum(
-            1
-            for f in self.formulas
-            if "=" in f.expression
-            and ">=" not in f.expression
-            and "<=" not in f.expression
-        )
-        inequalities_gte = sum(1 for f in self.formulas if ">=" in f.expression)
-        inequalities_lte = sum(1 for f in self.formulas if "<=" in f.expression)
-
-        lines.append(f"  Equalities (=): {equalities}")
-        lines.append(f"  Lower bounds (>=): {inequalities_gte}")
-        lines.append(f"  Upper bounds (<=): {inequalities_lte}")
-
-        # Show first few constraints
-        if len(self.formulas) <= 5:
-            lines.append("  Formulas:")
-            for f in self.formulas:
-                lines.append(f"    - {str(f)}")
-        else:
-            lines.append("  Sample formulas:")
-            for f in self.formulas[:3]:
-                lines.append(f"    - {str(f)}")
-            lines.append(f"    ... and {len(self.formulas) - 3} more")
-
-        return "\n".join(lines)
-
-
-class ExchangeConstraints(BaseModel):
+    Apply to exchange fluxes — the individual forward or reverse component
+    magnitudes of bidirectional reactions.  Exchange constraints allow
+    separate control of the back-flux independently of the net flux.
     """
-    FluxML exchange flux constraints.
 
-    Exchange constraints apply to exchange fluxes (bidirectional reactions split
-    into forward and reverse components). They constrain the individual forward
-    or reverse flux magnitudes.
-
-    Corresponds to fluxml/constraints/xch
-    """
+    _label: ClassVar[str] = "Exchange"
 
     formulas: List[ConstraintFormula] = Field(
         default_factory=list,
@@ -173,53 +207,16 @@ class ExchangeConstraints(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    def summary(self) -> str:
-        """Generate a summary of exchange constraints."""
-        if not self.formulas:
-            return "No exchange constraints"
 
-        lines = [f"Exchange Constraints ({len(self.formulas)} formulas):"]
+class MetaboliteSizeConstraints(_ConstraintsMixin, BaseModel):
+    """Metabolite pool-size constraints (``fluxml/constraints/psize``).
 
-        # Count constraint types
-        equalities = sum(
-            1
-            for f in self.formulas
-            if "=" in f.expression
-            and ">=" not in f.expression
-            and "<=" not in f.expression
-        )
-        inequalities_gte = sum(1 for f in self.formulas if ">=" in f.expression)
-        inequalities_lte = sum(1 for f in self.formulas if "<=" in f.expression)
-
-        lines.append(f"  Equalities (=): {equalities}")
-        lines.append(f"  Lower bounds (>=): {inequalities_gte}")
-        lines.append(f"  Upper bounds (<=): {inequalities_lte}")
-
-        # Show first few constraints
-        if len(self.formulas) <= 5:
-            lines.append("  Formulas:")
-            for f in self.formulas:
-                lines.append(f"    - {str(f)}")
-        else:
-            lines.append("  Sample formulas:")
-            for f in self.formulas[:3]:
-                lines.append(f"    - {str(f)}")
-            lines.append(f"    ... and {len(self.formulas) - 3} more")
-
-        return "\n".join(lines)
-
-
-class MetaboliteSizeConstraints(BaseModel):
+    Apply to metabolite concentrations rather than reaction fluxes.
+    Pool-size constraints are primarily used in non-stationary (INST) 13C
+    MFA, where the pool sizes are free variables alongside the fluxes.
     """
-    FluxML metabolite size constraints.
 
-    Metabolite size constraints apply to pool sizes (concentrations)
-    of metabolites.
-    Unlike flux constraints which apply to reactions, these constrain the amount
-    of metabolite present in the system.
-
-    Corresponds to fluxml/constraints/metabolitesize or psize
-    """
+    _label: ClassVar[str] = "Metabolite Size"
 
     formulas: List[ConstraintFormula] = Field(
         default_factory=list,
@@ -228,47 +225,9 @@ class MetaboliteSizeConstraints(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    def summary(self) -> str:
-        """Generate a summary of metabolite size constraints."""
-        if not self.formulas:
-            return "No metabolite size constraints"
-
-        lines = [
-            f"Metabolite Size Constraints ({len(self.formulas)} formulas):"
-        ]
-
-        # Count constraint types
-        equalities = sum(
-            1
-            for f in self.formulas
-            if "=" in f.expression
-            and ">=" not in f.expression
-            and "<=" not in f.expression
-        )
-        inequalities_gte = sum(1 for f in self.formulas if ">=" in f.expression)
-        inequalities_lte = sum(1 for f in self.formulas if "<=" in f.expression)
-
-        lines.append(f"  Equalities (=): {equalities}")
-        lines.append(f"  Lower bounds (>=): {inequalities_gte}")
-        lines.append(f"  Upper bounds (<=): {inequalities_lte}")
-
-        # Show first few constraints
-        if len(self.formulas) <= 5:
-            lines.append("  Formulas:")
-            for f in self.formulas:
-                lines.append(f"    - {str(f)}")
-        else:
-            lines.append("  Sample formulas:")
-            for f in self.formulas[:3]:
-                lines.append(f"    - {str(f)}")
-            lines.append(f"    ... and {len(self.formulas) - 3} more")
-
-        return "\n".join(lines)
-
 
 class Constraints(BaseModel):
-    """
-    FluxML constraints collection.
+    """FluxML constraints collection.
 
     Groups all constraint types:
     - Net constraints: Apply to net fluxes (forward - reverse) through reactions
@@ -295,8 +254,7 @@ class Constraints(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     def summary(self) -> str:
-        """
-        Generate a comprehensive summary of all constraints.
+        """Generate a comprehensive summary of all constraints.
 
         Returns:
             Multi-line string with constraint statistics and samples
@@ -332,8 +290,7 @@ class Constraints(BaseModel):
         return self.summary()
 
     def get_all_variable_names(self) -> set[str]:
-        """
-        Extract all unique variable names referenced in all constraints.
+        """Extract all unique variable names referenced in all constraints.
 
         Returns:
             Set of all variable names (reaction IDs, metabolite IDs, parameters)

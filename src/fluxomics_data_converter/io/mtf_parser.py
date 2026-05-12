@@ -1,9 +1,8 @@
-"""
-MTF (Metabolic Text Format) parser for influx_si format.
+"""MTF (Metabolic Text Format) parser for influx_si format.
 
 MTF is a multi-file format used by influx_si for 13C metabolic flux analysis.
 Each model consists of multiple files with a shared basename:
-    - .netw: Network definition (reactions with atom mappings)
+    - .netw: Network definition (reactions with atom transitions)
     - .linp: Label input (tracer specifications)
     - .miso: MS isotopomer measurements
     - .mflux: Flux measurements
@@ -18,11 +17,16 @@ from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 import pandas as pd
 
-from ..core.core import FluxomicsDataModel, Metadata, Model, Experiments
+from ..core.core import (
+    FluxomicsData,
+    Metadata,
+    MetabolicNetworkModel,
+    LabelingExperiments,
+)
 from ..core.common import DictList, TextualOrMath, ErrorModel
 from ..model.metabolite import Metabolite
 from ..model.reaction import Reaction
-from ..model.atom_mapping import AtomMapping
+from ..model.atom_mapping import AtomTransition
 from ..model.constraint import (
     Constraints,
     NetConstraints,
@@ -51,7 +55,33 @@ from ..output.simulation import (
 
 
 class MTFParser:
-    """Parser for MTF (Metabolic Text Format) files used by influx_si."""
+    """Parser for MTF (Metabolic Text Format) files used by influx_si.
+
+    MTF is a multi-file format. Each model is represented as a set of plain
+    text files sharing the same base name but with different extensions::
+
+        model.netw   — reaction network and atom transitions  (required)
+        model.linp   — label input (tracer fractions)
+        model.miso   — MS isotopomer measurements
+        model.mflux  — flux measurements
+        model.mmet   — metabolite pool-size measurements
+        model.cnstr  — stoichiometric constraints
+        model.tvar   — flux/metabolite variable types and initial values
+        model.opt    — solver options (parsed but not used)
+
+    Example::
+
+        parser = MTFParser()
+        model = parser.parse("data/ecoli")          # base path
+        model = parser.parse("data/ecoli.netw")     # or the .netw file itself
+
+    Reaction arrow conventions
+    --------------------------
+    - ``->``  : irreversible (net flux unconstrained)
+    - ``->>`` : irreversible, net flux ≥ 0 (auto-generates a constraint)
+    - ``<->`` : reversible (bidirectional)
+    - ``<->>`` : reversible, net flux ≥ 0 (auto-generates a constraint)
+    """
 
     # File extensions in MTF format
     EXTENSIONS = {
@@ -66,15 +96,15 @@ class MTFParser:
     }
 
     def __init__(self):
+        """Initialise parser state; call parse() to read MTF files."""
         self._metabolites: Dict[str, Metabolite] = {}
         self._reactions: Dict[str, Reaction] = {}
-        self._atom_mappings: Dict[str, AtomMapping] = {}
+        self._atom_mappings: Dict[str, AtomTransition] = {}
         # Track reactions with <->> arrow (reversible but net flux >= 0)
         self._net_positive_reactions: List[str] = []
 
-    def parse(self, base_path: str) -> FluxomicsDataModel:
-        """
-        Parse MTF files and return a FluxomicsDataModel.
+    def parse(self, base_path: str) -> FluxomicsData:
+        """Parse MTF files and return a FluxomicsData.
 
         Args:
             base_path: Path to base filename (without extension) or
@@ -82,7 +112,7 @@ class MTFParser:
                        For example: "model/e_coli" or "model/e_coli.netw"
 
         Returns:
-            FluxomicsDataModel containing the parsed data
+            FluxomicsData containing the parsed data
         """
         base_path = Path(base_path)
 
@@ -99,7 +129,7 @@ class MTFParser:
         self._parse_network(netw_path)
 
         # Build Model from parsed network
-        model = Model(
+        model = MetabolicNetworkModel(
             metabolites=DictList(list(self._metabolites.values())),
             reactions=DictList(list(self._reactions.values())),
             atom_mappings=self._atom_mappings,
@@ -114,7 +144,7 @@ class MTFParser:
         # Create experiment if we have any experimental data
         experiments = []
         if tracers or measurement or simulation:
-            experiment = Experiments(
+            experiment = LabelingExperiments(
                 name=base_path.stem,
                 stationary=True,
                 tracers=tracers or [],
@@ -130,22 +160,21 @@ class MTFParser:
             comment=f"Imported from MTF format: {base_path.name}",
         )
 
-        return FluxomicsDataModel(
+        return FluxomicsData(
             model=model,
-            info=metadata,
+            metadata=metadata,
             constraints=constraints,
             experiments=experiments,
         )
 
     def _parse_network(self, filepath: Path) -> None:
-        """
-        Parse .netw file containing reaction network with atom mappings.
+        r"""Parse .netw file containing reaction network with atom transitions.
 
-        Format: reaction_id:\\tsubstrate (ATOMS) + substrate (atoms) ->
+        Format: reaction_id:\tsubstrate (ATOMS) + substrate (atoms) ->
         product (ATOMS)
         - -> for irreversible reactions
         - <-> for reversible reactions
-        - Atom mappings in parentheses using letter notation
+        - Atom transitions in parentheses using letter notation
         """
         self._metabolites = {}
         self._reactions = {}
@@ -169,12 +198,11 @@ class MTFParser:
 
     def _parse_reaction_line(
         self, line: str
-    ) -> Optional[Tuple[Reaction, Optional[AtomMapping]]]:
-        """
-        Parse a single reaction line from .netw file.
+    ) -> Optional[Tuple[Reaction, Optional[AtomTransition]]]:
+        """Parse a single reaction line from .netw file.
 
         Returns:
-            Tuple of (Reaction, AtomMapping) or None if line is invalid
+            Tuple of (Reaction, AtomTransition) or None if line is invalid
 
         Arrow types (from influx_si documentation):
             ->   : non-reversible (exchange flux = 0, net flux can be +/-)
@@ -202,7 +230,7 @@ class MTFParser:
         if arrow == "<->>":
             self._net_positive_reactions.append(rxn_id)
 
-        # Parse reactants and products with atom mappings
+        # Parse reactants and products with atom transitions
         reactants, reactant_atoms = self._parse_compounds(reactants_str)
         products, product_atoms = self._parse_compounds(products_str)
 
@@ -219,7 +247,7 @@ class MTFParser:
             reversibility=reversible,
         )
 
-        # Create atom mapping if atoms are specified
+        # Create atom transition if atoms are specified
         atom_mapping = None
         if reactant_atoms and product_atoms:
             atom_mapping = self._create_atom_mapping(
@@ -231,8 +259,7 @@ class MTFParser:
     def _parse_compounds(
         self, compounds_str: str
     ) -> Tuple[List[str], List[Tuple[str, str]]]:
-        """
-        Parse compounds string with optional atom mappings.
+        """Parse compounds string with optional atom transitions.
 
         Args:
             compounds_str: String like "A (abc) + B (def)"
@@ -249,7 +276,7 @@ class MTFParser:
         for part in parts:
             part = part.strip()
 
-            # Match compound with optional atom mapping:
+            # Match compound with optional atom transition:
             # "Compound(atoms)" or "Compound (atoms)"
             match = re.match(r"^(\S+?)(?:\s*\(([^)]+)\))?$", part)
             if match:
@@ -269,9 +296,8 @@ class MTFParser:
         products: List[str],
         reactant_atoms: List[Tuple[str, str]],
         product_atoms: List[Tuple[str, str]],
-    ) -> AtomMapping:
-        """
-        Create AtomMapping from letter notation.
+    ) -> AtomTransition:
+        """Create AtomTransition from letter notation.
 
         Args:
             rxn_id: Reaction ID
@@ -281,15 +307,15 @@ class MTFParser:
             product_atoms: List of (compound_id, atom_letters) tuples
 
         Returns:
-            AtomMapping object
+            AtomTransition object
         """
-        # Use the static method from AtomMapping to parse letter notation
-        atom_map = AtomMapping.parse_letter_notation(
+        # Use the static method from AtomTransition to parse letter notation
+        atom_map = AtomTransition.parse_letter_notation(
             reactant_atoms, product_atoms
         )
 
-        # Create single-map AtomMapping
-        return AtomMapping(
+        # Create single-map AtomTransition
+        return AtomTransition(
             reaction_id=rxn_id,
             reactants=reactants,
             products=products,
@@ -298,10 +324,9 @@ class MTFParser:
         )
 
     def _parse_constraints(self, base_path: Path) -> Optional[Constraints]:
-        """
-        Parse .cnstr file containing constraints.
+        r"""Parse .cnstr file containing constraints.
 
-        Format (TSV): Id\\tComment\\tKind\\tFormula\\tOperator\\tValue
+        Format (TSV): Id\tComment\tKind\tFormula\tOperator\tValue
         - Kind: NET or XCH
         - Operator: ==, >=, <=
 
@@ -378,10 +403,9 @@ class MTFParser:
         )
 
     def _parse_label_input(self, base_path: Path) -> Optional[List[Tracers]]:
-        """
-        Parse .linp file containing tracer specifications.
+        r"""Parse .linp file containing tracer specifications.
 
-        Format (TSV): Id\\tComment\\tMetabolite\\tIsotopomer\\tValue
+        Format (TSV): Id\tComment\tMetabolite\tIsotopomer\tValue
         - Isotopomer: Binary string (e.g., "111111", "100000")
         - Value: Fraction (0-1)
         """
@@ -446,9 +470,7 @@ class MTFParser:
         return tracers
 
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
-        """
-        Parse measurement files (.miso, .mflux, .mmet).
-        """
+        """Parse measurement files (.miso, .mflux, .mmet)."""
         # Parse MS isotopomer measurements
         labeling_measurement, labeling_data = self._parse_miso(base_path)
 
@@ -480,11 +502,10 @@ class MTFParser:
     def _parse_miso(
         self, base_path: Path
     ) -> Tuple[Optional[LabelingMeasurement], Optional[List[Datum]]]:
-        """
-        Parse .miso file containing MS isotopomer measurements.
+        r"""Parse .miso file containing MS isotopomer measurements.
 
         Format (TSV):
-        Id\\tComment\\tSpecie\\tFragment\\tDataset\\tIsospecies\\tValue\\tSD\\tTime
+        Id\tComment\tSpecie\tFragment\tDataset\tIsospecies\tValue\tSD\tTime
         - Fragment: Comma-separated atom positions (e.g., "1,2,3,4")
         - Isospecies: Mass isotopomer label (M0, M1, M2, ...)
 
@@ -657,10 +678,9 @@ class MTFParser:
     def _parse_mflux(
         self, base_path: Path
     ) -> Tuple[Optional[FluxMeasurement], Optional[List[Datum]]]:
-        """
-        Parse .mflux file containing flux measurements.
+        r"""Parse .mflux file containing flux measurements.
 
-        Format (TSV): Id\\tComment\\tFlux\\tValue\\tSD
+        Format (TSV): Id\tComment\tFlux\tValue\tSD
         """
         mflux_path = base_path.with_suffix(".mflux")
         if not mflux_path.exists():
@@ -720,10 +740,9 @@ class MTFParser:
     def _parse_mmet(
         self, base_path: Path
     ) -> Tuple[Optional[MetaboliteSizeMeasurement], Optional[List[Datum]]]:
-        """
-        Parse .mmet file containing metabolite concentration measurements.
+        r"""Parse .mmet file containing metabolite concentration measurements.
 
-        Format (TSV): Id\\tComment\\tSpecie\\tValue\\tSD
+        Format (TSV): Id\tComment\tSpecie\tValue\tSD
         """
         mmet_path = base_path.with_suffix(".mmet")
         if not mmet_path.exists():
@@ -780,10 +799,10 @@ class MTFParser:
         )
 
     def _parse_variables(self, base_path: Path) -> Optional[Simulation]:
-        """
-        Parse .tvar file containing variable types and starting values.
+        r"""Parse .tvar file containing variable types and starting values.
 
-        Format (TSV): Id\\tComment\\tName\\tKind\\tType\\tValue
+        Format (TSV): Id\tComment\tName\tKind\tType\tValue
+
         - Kind: NET or XCH
         - Type: F (Free), D (Dependent), C (Constrained)
         """
@@ -890,15 +909,14 @@ class MTFParser:
         )
 
 
-def parse_mtf(base_path: str) -> FluxomicsDataModel:
-    """
-    Convenience function to parse MTF files.
+def parse_mtf(base_path: str) -> FluxomicsData:
+    """Convenience function to parse MTF files.
 
     Args:
         base_path: Path to base filename (without extension) or any MTF file.
 
     Returns:
-        FluxomicsDataModel containing the parsed data
+        FluxomicsData containing the parsed data
     """
     parser = MTFParser()
     return parser.parse(base_path)

@@ -14,12 +14,29 @@ repos:
       exclude: ^data/
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  # Ruff version.
+  # Keep this version in sync with the ruff version in [dependency-groups.dev].
   rev: v0.8.6
   hooks:
-    # Run the linter.
+    # Lint: style, imports, and Google-style docstring conventions (D rules).
+    # The D rules are configured via [tool.ruff.lint.pydocstyle] in
+    # pyproject.toml (convention = "google").
     - id: ruff
       exclude: ^data/
-    # Run the formatter.
+
+    # Format: auto-formats code; also fixes auto-fixable D violations.
     - id: ruff-format
       exclude: ^data/
+
+    # Docstring completeness: checks that every public function that returns
+    # a value has a "Returns:" section, and that every raised exception is
+    # documented with a "Raises:" section (DOC201, DOC501, DOC502).
+    # Uses --preview because DOC rules are not yet stable in ruff.
+    # Runs after ruff so formatting is clean before this check.
+    - id: ruff
+      name: ruff-docstring-completeness
+      alias: ruff-docstring-completeness
+      args:
+        - --select=DOC
+        - --preview
+        - --no-fix
+      exclude: ^(data|tests)/

@@ -12,4 +12,7 @@ site/
 .venv/
 *.egg-info/
 *.egg
-linkml/
+.agent/
+.venv_ff/
+.venv-MFA_Benchmarking/
+.output/

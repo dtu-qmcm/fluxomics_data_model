@@ -1,5 +1,17 @@
-"""
-Common data structures used across FluxML models.
+"""Shared building-block data structures used across all FluxML modules.
+
+This module provides:
+
+- :class:`Annotation`       — key/value metadata tag (``<annotation>``)
+- :class:`TextualOrMath`    — a value that is either a plain string or MathML
+- :class:`ErrorModel`       — measurement error formula wrapper
+- :class:`JAXArray`         — Pydantic-serialisable wrapper for a JAX array
+- :class:`TimeSeries`       — time-indexed arrays for non-stationary data
+- :class:`AtomTransitionsNetwork` — ``dict`` subclass with a rich ``__repr__``
+- :class:`DictList`         — combined list + O(1)-by-id dict collection
+
+All Pydantic models in this module use ``frozen=True`` (immutable after
+construction).
 """
 
 from typing import Optional, Union, Any, List, TypeVar, Generic
@@ -10,8 +22,7 @@ from itertools import islice
 
 
 class Annotation(BaseModel):
-    """
-    FluxML annotation element for additional metadata.
+    """FluxML annotation element for additional metadata.
 
     Corresponds to fluxml/reactionnetwork/metabolites/metabolite/annotation
     and fluxml/reactionnetwork/reaction/annotation.
@@ -27,8 +38,7 @@ class Annotation(BaseModel):
 
 
 class TextualOrMath(BaseModel):
-    """
-    FluxML textual or MathML content.
+    """FluxML textual or MathML content.
 
     Used for constraints and mathematical expressions.
     """
@@ -44,14 +54,14 @@ class TextualOrMath(BaseModel):
         frozen = True
 
     def __init__(self, **data):
+        """Initialise, requiring at least one of textual or mathml."""
         super().__init__(**data)
         if not self.textual and not self.mathml:
             raise ValueError("Either textual or mathml must be provided")
 
 
 class ErrorModel(BaseModel):
-    """
-    FluxML error model for measurement uncertainties.
+    """FluxML error model for measurement uncertainties.
 
     Corresponds to fluxml/experiments/measurement/model/*/errormodel
     """
@@ -63,8 +73,19 @@ class ErrorModel(BaseModel):
 
 
 class JAXArray(BaseModel):
-    """
-    JAX array wrapper for Pydantic serialization.
+    """Pydantic-serialisable wrapper for a JAX array.
+
+    JAX arrays cannot be directly stored inside a Pydantic model because
+    they are not JSON-serialisable.  This class bridges the gap by
+    storing the array's shape, dtype, and data as plain Python objects.
+    Use :meth:`from_jax_array` to wrap a JAX array and :meth:`to_jax_array`
+    to unwrap it.
+
+    Example::
+
+        arr = jnp.ones((3, 4), dtype=jnp.float32)
+        wrapped = JAXArray.from_jax_array(arr)
+        recovered = wrapped.to_jax_array()  # shape (3, 4), dtype float32
     """
 
     shape: tuple[int, ...] = Field(description="Array shape")
@@ -85,13 +106,11 @@ class JAXArray(BaseModel):
 
 
 class TimeSeries(BaseModel):
-    """
-    Time series data structure for non-stationary measurements.
-    """
+    """Time series data structure for non-stationary measurements."""
 
-    times: JAXArray = Field(description="Time points")
-    values: JAXArray = Field(description="Measurement values")
-    errors: Optional[JAXArray] = Field(
+    times: "JAXArray" = Field(description="Time points")
+    values: "JAXArray" = Field(description="Measurement values")
+    errors: Optional["JAXArray"] = Field(
         default=None, description="Measurement errors"
     )
 
@@ -125,23 +144,18 @@ class TimeSeries(BaseModel):
         )
 
 
-# Type variable for DictList items
-T = TypeVar("T", bound=BaseModel)
+class AtomTransitionsNetwork(dict):
+    """Dictionary for atom transitions for a given metabolic network.
 
-
-class AtomMappingsDict(dict):
-    """
-    A dictionary for storing atom mappings with a nice summary representation.
-
-    Keys are reaction IDs, values are AtomMapping objects.
+    Keys are reaction IDs, values are AtomTransition objects.
     """
 
     def __repr__(self) -> str:
-        """String representation with summary information."""
+        """Return string representation with summary information."""
         if not self:
-            return "=== Atom Mappings ===\n  No atom mappings defined"
+            return "=== Atom Transitions ===\n  No atom transitions defined"
 
-        lines = ["=== Atom Mappings ==="]
+        lines = ["=== Atom Transitions ==="]
 
         # Total count
         lines.append(f"  Total: {len(self)}")
@@ -155,10 +169,10 @@ class AtomMappingsDict(dict):
         if with_variants > 0:
             lines.append(f"  Reactions with multiple variants: {with_variants}")
 
-        # Sample atom mappings
+        # Sample atom transitions
         sample_size = min(5, len(self))
         lines.append("")
-        lines.append("  Sample atom mappings:")
+        lines.append("  Sample atom transitions:")
         for rxn_id, am in list(self.items())[:sample_size]:
             if hasattr(am, "maps"):
                 n_maps = len(am.maps)
@@ -191,21 +205,44 @@ class AtomMappingsDict(dict):
         dict_schema = handler.generate_schema(dict)
 
         # Return a schema that validates as a dict but returns an
-        # AtomMappingsDict
+        # AtomTransitionsNetwork
         return core_schema.no_info_after_validator_function(
             lambda v: cls(v),
             dict_schema,
         )
 
 
+# Type variable for DictList items — must have an .id attribute.
+T = TypeVar("T", bound=BaseModel)
+
+
 class DictList(list, Generic[T]):
-    """
-    A combined dict and list data structure.
+    """A combined list and dictionary providing O(1) lookup by ``id``.
 
-    This object behaves like a list but has O(1) speed benefits
-    of a dict when looking up elements by their id attribute.
+    Behaves exactly like a ``list`` — supports indexing, slicing, iteration,
+    ``len``, ``append``, ``extend``, etc. — but additionally maintains an
+    internal ``{id: index}`` mapping so that individual items can be
+    retrieved by their ``id`` attribute in O(1) time.
 
-    Items must have an 'id' attribute.
+    Every item stored in a ``DictList`` must have an ``id`` attribute whose
+    value is a unique string.  Attempting to insert a duplicate ID raises
+    ``ValueError``.
+
+    Example::
+
+        metabolites = DictList([
+            Metabolite(id="Glc", atoms=6),
+            Metabolite(id="G6P", atoms=6),
+        ])
+        metabolites.get_by_id("G6P")   # O(1) lookup
+        metabolites["G6P"]             # same, via __getitem__
+        metabolites[0]                 # still works by integer index
+        "Glc" in metabolites           # O(1) membership test
+        metabolites.ids                # ["Glc", "G6P"] in insertion order
+
+    The ``ids`` property preserves insertion order and is the correct source
+    of metabolite/reaction orderings for numerical matrices (unlike iterating
+    over a ``frozenset``).
     """
 
     def __init__(self, items: Optional[Union[List[T], "DictList[T]"]] = None):
@@ -493,7 +530,7 @@ class DictList(list, Generic[T]):
         lines.append(f"  Irreversible: {irreversible}")
         if variant_reactions > 0:
             lines.append(
-                f"  With atom mapping variants: {variant_reactions} "
+                f"  With atom transition variants: {variant_reactions} "
                 f"({total_variants} total variants)"
             )
 

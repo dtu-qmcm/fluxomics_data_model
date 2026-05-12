@@ -1,7 +1,6 @@
-"""
-Atom mapping functionality for fluxomics reactions.
+"""atom transition functionality for fluxomics reactions.
 
-This module provides classes and utilities for handling atom mappings in
+This module provides classes and utilities for handling atom transitions in
 metabolic reactions, including support for:
 - Multiple mapping formats (letter notation, FluxML cfg strings, RDKit SMILES)
 - Symmetric reactions with multiple equivalent mappings
@@ -33,7 +32,7 @@ class AtomAddress:
 
 
 class AtomMap(BaseModel):
-    """A single atom mapping for a reaction.
+    """A single atom transition for a reaction.
 
     Maps product atoms to their source reactant atoms.
     Keys and values are AtomAddress objects with 1-based indices.
@@ -65,26 +64,61 @@ class AtomMap(BaseModel):
         ] = AtomAddress(src_cpd, src_atom, atom_type, src_instance)
         return AtomMap(mapping=new_mapping)
 
-    def product_atoms(self) -> AtomAddress:
-        """Return number of atoms per product compound instance."""
+    def product_atoms(self) -> Dict[Tuple[str, int], int]:
+        """Return the maximum atom index per product compound instance.
+
+        Iterates over the mapping *keys* (which are product-side
+        ``AtomAddress`` objects) and, for each ``(compound_id, instance)``
+        pair, records the highest atom index seen.  The result therefore
+        gives the number of labelling positions for every product compound
+        instance that appears in this map.
+
+        Returns:
+            Dict mapping ``(compound_id, instance)`` to the highest
+            (1-based) atom index found for that compound instance on the
+            product side.
+
+        Example::
+
+            # AtomMap with two product atoms for compound "C"
+            result = atom_map.product_atoms()
+            # result == {("C", 1): 2}  # C has atoms at indices 1 and 2
+        """
         result: Dict[Tuple[str, int], int] = {}
-        for cpd, atom, _, instance in self.mapping.keys():
-            key = (cpd, instance)
-            result[key] = max(result.get(key, 0), atom)
-        return AtomAddress(result)
+        for addr in self.mapping.keys():
+            key = (addr.mol, addr.instance)
+            result[key] = max(result.get(key, 0), addr.index)
+        return result
 
-    def reactant_atoms(self) -> AtomAddress:
-        """Return number of atoms per reactant compound instance."""
+    def reactant_atoms(self) -> Dict[Tuple[str, int], int]:
+        """Return the maximum atom index per reactant compound instance.
+
+        Iterates over the mapping *values* (which are reactant-side
+        ``AtomAddress`` objects) and, for each ``(compound_id, instance)``
+        pair, records the highest atom index seen.  The result therefore
+        gives the number of labelling positions for every reactant compound
+        instance that participates in this map.
+
+        Returns:
+            Dict mapping ``(compound_id, instance)`` to the highest
+            (1-based) atom index found for that compound instance on the
+            reactant side.
+
+        Example::
+
+            # AtomMap where reactant "A" contributes atoms 1-3
+            result = atom_map.reactant_atoms()
+            # result == {("A", 1): 3}
+        """
         result: Dict[Tuple[str, int], int] = {}
-        for cpd, atom, _, instance in self.mapping.values():
-            key = (cpd, instance)
-            result[key] = max(result.get(key, 0), atom)
-        return AtomAddress(result)
+        for addr in self.mapping.values():
+            key = (addr.mol, addr.instance)
+            result[key] = max(result.get(key, 0), addr.index)
+        return result
 
 
-class AtomMapping(BaseModel):
-    """
-    Complete atom mapping information for a reaction.
+class AtomTransition(BaseModel):
+    """Complete atom transition information for a reaction.
 
     Supports multiple alternative mappings (variants/symmetries).
     Separated from Reaction class for cleaner design.
@@ -114,31 +148,31 @@ class AtomMapping(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     def __str__(self) -> str:
-        """String representation with summary information."""
+        """String representation with summary metadatarmation."""
         return self.summary()
 
     def summary(self) -> str:
-        """Return a summary of the atom mapping.
+        """Return a summary of the atom transition.
 
         Returns:
-            String with information about the number of variants and
+            String with metadatarmation about the number of variants and
             their weights
         """
         num_maps = len(self.maps)
 
         if num_maps == 0:
-            return f"AtomMapping(reaction_id='{self.reaction_id}', no maps)"
+            return f"AtomTransition(reaction_id='{self.reaction_id}', no maps)"
 
         if num_maps == 1:
             map_id = next(iter(self.maps.keys()))
             return (
-                f"AtomMapping(reaction_id='{self.reaction_id}', "
+                f"AtomTransition(reaction_id='{self.reaction_id}', "
                 f"single map: {map_id})"
             )
 
         # Multiple variants
         lines = [
-            f"AtomMapping(reaction_id='{self.reaction_id}', "
+            f"AtomTransition(reaction_id='{self.reaction_id}', "
             f"{num_maps} variants):",
         ]
 
@@ -155,14 +189,52 @@ class AtomMapping(BaseModel):
         reactant_items: List[Tuple[str, str]],
         product_items: List[Tuple[str, str]],
     ) -> AtomMap:
-        """Parse atom mapping from letter notation data without string building.
+        """Parse atom transitions from letter-notation format.
+
+        In letter notation each compound is paired with a string of lowercase
+        (or uppercase) letters.  Each unique letter is an atom label; the
+        same letter appearing on a reactant and on a product means that atom
+        is transferred directly between those positions.
+
+        The bijection rule requires that every letter that appears in a
+        product string must appear the same number of times across all
+        reactant strings.
+
+        Example::
+
+            # Reaction: A(abc) + B(de) -> C(abcde)
+            reactant_items = [("A", "abc"), ("B", "de")]
+            product_items  = [("C", "abcde")]
+            atom_map = AtomTransition.parse_letter_notation(
+                reactant_items, product_items
+            )
+            # atom_map.mapping maps each product AtomAddress to its
+            # reactant source:
+            #   C@1 <- A@1 (letter 'a')
+            #   C@2 <- A@2 (letter 'b')
+            #   C@3 <- A@3 (letter 'c')
+            #   C@4 <- B@1 (letter 'd')
+            #   C@5 <- B@2 (letter 'e')
 
         Args:
-            reactant_items: List of (compound_id, letter_cfg) tuples
-            product_items: List of (product_id, letter_cfg) tuples
+            reactant_items: List of ``(compound_id, atom_string)`` pairs for
+                each reactant that carries labelling.  Cofactors without
+                labelling are omitted.  Repeated compound IDs are allowed and
+                will be treated as separate instances (instance counter
+                increments per compound).
+            product_items: List of ``(compound_id, atom_string)`` pairs for
+                each product.  Every letter in a product string must appear
+                in the concatenated reactant atom strings (bijection).
 
         Returns:
-            Single AtomMap parsed from the notation
+            An :class:`AtomMap` where each product :class:`AtomAddress`
+            maps to its source reactant :class:`AtomAddress`.  All atom
+            indices are 1-based.
+
+        Raises:
+            ValueError: If a product atom label appears more times in the
+                products than it does in the reactants, violating the
+                bijection constraint.
         """
         # Build a global list of all atoms from all reactants
         # (cpd, atom_idx, instance)
@@ -222,22 +294,23 @@ class AtomMapping(BaseModel):
         return atom_map
 
     def to_letter_notation(self, atom_map_id: Optional[str] = None) -> str:
-        """Convert atom mapping to letter notation string.
+        r"""Convert atom transition to letter notation string.
 
         Args:
             atom_map_id: Optional atom map ID to use. If None, shows
                 all variants or uses the single map if only one exists.
 
-        Returns a string representation of the atom mapping in letter
+        Returns a string representation of the atom transition in letter
         notation format. If multiple elements are present, they are shown
         on separate lines. If multiple mapping variants exist and no atom_map_id
         is specified, shows all variants.
 
-        Example: "A(abc) + B(de) -> C(abcde)"
-        With elements: "C: A(ab) -> B(ab)\nN: A(c) -> B(c)"
+        Example: ``"A(abc) + B(de) -> C(abcde)"``
+
+        With multiple elements: ``"C: A(ab) -> B(ab)\nN: A(c) -> B(c)"``
 
         Returns:
-            Letter notation string representation of the mapping(s)
+            Letter notation string representation of the mapping(s).
         """
         from collections import defaultdict
 
@@ -259,8 +332,8 @@ class AtomMapping(BaseModel):
                     if self.weights and map_id in self.weights
                     else ""
                 )
-                # Create temporary AtomMapping for single map recursion
-                temp_mapping = AtomMapping(
+                # Create temporary AtomTransition for single map recursion
+                temp_mapping = AtomTransition(
                     reaction_id=self.reaction_id,
                     reactants=self.reactants,
                     products=self.products,
@@ -363,19 +436,59 @@ class AtomMapping(BaseModel):
         product_cfgs: List[Tuple[str, str]],
         reactant_order: List[str],
     ) -> AtomMap:
-        """Parse FluxML cfg strings.
+        """Parse atom transitions from the FluxML ``C#k@r`` cfg format.
+
+        FluxML encodes atom transitions in product cfg strings using tokens of
+        the form ``Element#atom_index@reactant_position``.  For example, the
+        token ``C#3@2`` means "this product atom comes from carbon atom 3 of
+        the 2nd reactant compound listed in *reactant_order*".
+
+        Example (aldolase FBP → GAP + DHAP from the FluxML spec)::
+
+            reactant_order = ["FBP"]
+            reactant_cfgs  = {"FBP": "C#1@1 C#2@1 C#3@1 C#4@1 C#5@1 C#6@1"}
+            product_cfgs   = [
+                ("GAP",  "C#4@1 C#1@1 C#3@1"),
+                ("DHAP", "C#5@1 C#2@1 C#6@1"),
+            ]
+            atom_map = AtomTransition.parse_fluxml_cfg(
+                reactant_cfgs, product_cfgs, reactant_order
+            )
+            # GAP atom 1 ← FBP atom 4
+            # GAP atom 2 ← FBP atom 1
+            # GAP atom 3 ← FBP atom 3
+            # DHAP atom 1 ← FBP atom 5
+            # ...
+
+        Token grammar::
+
+            token ::= element "#" source_atom_index "@" reactant_position
+            element             ::= [A-Z]           (e.g. "C", "N")
+            source_atom_index   ::= integer >= 1    (1-based atom number)
+            reactant_position   ::= integer >= 1    (1-based index into reactant_order)
 
         Args:
-            reactant_cfgs: Dict of reactant_id -> cfg string
-            product_cfgs: List of (product_id, cfg string) tuples
-            reactant_order: Ordered list of reactant IDs
-                (with repetitions for instances)
+            reactant_cfgs: Mapping of ``reactant_id -> cfg_string``.
+                The cfg string is space-separated tokens, but for reactants
+                the content is informational only; the actual source positions
+                are determined by *reactant_order*.
+            product_cfgs: Ordered list of ``(product_id, cfg_string)`` pairs.
+                Products are processed in order; repeated compound IDs create
+                separate instances.
+            reactant_order: Ordered list of reactant IDs corresponding to the
+                ``@r`` positions in the product tokens.  Repeated compound IDs
+                are allowed and increment the instance counter for that
+                compound.
 
         Returns:
-            Single AtomMap parsed from the cfg strings
+            An :class:`AtomMap` where each product :class:`AtomAddress`
+            (1-based) maps to its source reactant :class:`AtomAddress`.
 
-        In product cfg "C#1@2 C#3@1", each token means:
-        - C#k@r: take atom k from reactant at position r
+        Raises:
+            ValueError: If a product cfg token does not match the
+                ``Element#k@r`` pattern.
+            IndexError: If the ``@r`` reactant position is out of range for
+                *reactant_order*.
         """
         atom_map = AtomMap()
 
@@ -435,7 +548,7 @@ class AtomMapping(BaseModel):
         self,
         atom_map_id: Optional[str] = None,
     ) -> Optional[str]:
-        """Convert to FluxML-style atom mapping string.
+        """Convert to FluxML-style atom transition string.
 
         Args:
             atom_map_id: Optional atom map ID to use. If None and only
@@ -549,15 +662,17 @@ class AtomMapping(BaseModel):
         product_side = " + ".join(product_parts)
         return f'"{reactant_side} => {product_side}"'
 
-    def merge_symmetric_mappings(self, other: "AtomMapping") -> "AtomMapping":
+    def merge_symmetric_mappings(
+        self, other: "AtomTransition"
+    ) -> "AtomTransition":
         """Merge with another mapping to handle symmetric reactions.
 
         Args:
-            other: Another AtomMapping to merge with (must have same
+            other: Another AtomTransition to merge with (must have same
                 reaction_id)
 
         Returns:
-            New AtomMapping with combined maps
+            New AtomTransition with combined maps
         """
         if self.reaction_id != other.reaction_id:
             raise ValueError("Can only merge mappings for the same reaction")
@@ -593,7 +708,7 @@ class AtomMapping(BaseModel):
                 )
                 new_weights[actual_key] = w * other_weight
 
-        return AtomMapping(
+        return AtomTransition(
             reaction_id=self.reaction_id,
             reactants=self.reactants,
             products=self.products,
@@ -608,20 +723,57 @@ class AtomMapping(BaseModel):
         product_order: Optional[List[str]] = None,
         atom_map_id: Optional[str] = None,
     ) -> Dict[Tuple[str, int], np.ndarray]:
-        """Transform isotopomer distributions through the reaction.
+        """Propagate isotopomer distributions through a single reaction mapping.
+
+        Each isotopomer distribution is a dense 1-D numpy array of length
+        ``2**n_atoms``.  Index *i* encodes a labelling pattern as a binary
+        integer: bit *k* equals 1 if atom position *k+1* carries a heavy
+        isotope label (e.g. ¹³C), and 0 otherwise.  Values must sum to 1.
+
+        Algorithm
+        ---------
+        1. **Joint distribution** — the individual reactant vectors are
+           combined into a single joint distribution by taking successive
+           Kronecker products.  This assumes statistical independence between
+           reactant metabolites (standard assumption in ¹³C MFA).
+        2. **Bit permutation** — for each index in the joint distribution,
+           the bits corresponding to atoms that map to a given product are
+           extracted and re-packed according to the atom map, accumulating
+           probability into the product distribution via ``numpy.add.at``.
+        3. **Splitting** — the full concatenated product distribution is
+           sliced into per-product-compound arrays.
+
+        Example::
+
+            # Simple 1-carbon transfer: A(a) -> B(a)
+            reactant_dist = {("A", 1): np.array([0.5, 0.5])}  # 50% labeled
+            result = mapping.transform_isotopomers(reactant_dist)
+            # result == {("B", 1): array([0.5, 0.5])}
 
         Args:
-            reactant_distributions: Dict of (compound_id, instance) ->
-                isotopomer distribution
-            reactant_order: Order of reactants (with repetitions for multiple
-                instances). If None, uses self.reactants.
-            product_order: Order of products (with repetitions for multiple
-                instances). If None, uses self.products.
-            atom_map_id: Which mapping variant to use. If None and only
-                one map exists, uses that map.
+            reactant_distributions: Mapping from ``(compound_id, instance)``
+                to a 1-D numpy array of isotopomer fractions of length
+                ``2**n_atoms``.  Every reactant compound that appears in
+                *reactant_order* must have an entry here.
+            reactant_order: Ordered list of reactant IDs to process (with
+                repeated entries for multiple instances of the same compound).
+                Defaults to ``self.reactants``.
+            product_order: Ordered list of product IDs.
+                Defaults to ``self.products``.
+            atom_map_id: Key into ``self.maps`` selecting a specific variant.
+                Must be provided when ``self.maps`` contains more than one
+                entry; if there is exactly one map and this is ``None``, that
+                map is used automatically.
 
         Returns:
-            Dict of (product_id, instance) -> isotopomer distribution
+            Mapping from ``(compound_id, instance)`` to a 1-D numpy array
+            of product isotopomer fractions.
+
+        Raises:
+            KeyError: If *atom_map_id* is not found in ``self.maps``.
+            ValueError: If *atom_map_id* is ``None`` but multiple maps exist,
+                or if a required reactant distribution is missing, or if the
+                distribution length is not a power of two.
         """
         # Use stored order if not provided
         if reactant_order is None:
@@ -742,18 +894,40 @@ class AtomMapping(BaseModel):
         reactant_order: Optional[List[str]] = None,
         product_order: Optional[List[str]] = None,
     ) -> Dict[Tuple[str, int], np.ndarray]:
-        """Average isotopomer transformation over all mapping variants.
+        """Propagate isotopomer distributions using a weighted average over all variants.
+
+        For reactions with symmetric substrates (e.g. succinate, which is
+        geometrically symmetric and can bind in two orientations),
+        :class:`AtomTransition` stores multiple atom maps in ``self.maps``.
+        This method calls :meth:`transform_isotopomers` once per variant and
+        returns the weighted sum.
+
+        If ``self.weights`` is ``None``, all variants receive equal weight
+        ``1 / n_variants``.
+
+        Example::
+
+            # Symmetric reaction with two equal variants
+            result = mapping.transform_with_symmetry(reactant_dists)
+            # Equivalent to:
+            #   0.5 * transform_isotopomers(..., atom_map_id="id___1")
+            # + 0.5 * transform_isotopomers(..., atom_map_id="id___2")
 
         Args:
-            reactant_distributions: Dict of (compound_id, instance) ->
-                isotopomer distribution
-            reactant_order: Order of reactants (with repetitions). If
-                None, uses self.reactants.
-            product_order: Order of products (with repetitions). If
-                None, uses self.products.
+            reactant_distributions: Mapping from ``(compound_id, instance)``
+                to a 1-D numpy array of isotopomer fractions.  See
+                :meth:`transform_isotopomers` for the encoding convention.
+            reactant_order: Ordered reactant IDs.  Defaults to
+                ``self.reactants``.
+            product_order: Ordered product IDs.  Defaults to
+                ``self.products``.
 
         Returns:
-            Dict of (product_id, instance) -> isotopomer distribution
+            Mapping from ``(compound_id, instance)`` to a 1-D numpy array
+            of product isotopomer fractions (weighted sum over all variants).
+
+        Raises:
+            ValueError: If ``self.maps`` is empty.
         """
         if not self.maps:
             raise ValueError("No atom maps available")

@@ -29,7 +29,7 @@ jobs:
         # Install a specific version of uv.
         version: "0.5.15"
 
-    - name: install fluxomics_data_model
+    - name: install fluxomics_data_converter
       run: uv sync --dev --all-extras
 
     - name: pre-commit checks

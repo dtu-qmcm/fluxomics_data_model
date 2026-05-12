@@ -1,6 +1,4 @@
-"""
-Experiment-related data models for FluxML.
-"""
+"""Experiment-related data models for FluxML."""
 
 from .tracer import Tracers, LabelComposition
 from .measurement import (

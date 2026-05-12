@@ -1,11 +1,12 @@
-"""
-Freeflux tabular format parser for tsv/csv/xlsx files.
+"""Freeflux tabular format parser for tsv/csv/xlsx files.
 
 Freeflux is a Python package for 13C metabolic flux analysis that uses
 tabular input files. This parser supports the following file types:
-    - reactions: Network definition with atom mappings
+    - reactions: Network definition with atom transitions
     - fluxes: Flux values (simulation/reference)
     - concentrations: Metabolite pool sizes
+    - label_input: Tracer labeling strategy (substrate + pattern + fraction + purity)
+    - flux_bounds / constraints: Per-reaction or global flux bounds [lo, hi]
     - measured_MDVs: Steady-state mass distribution vector measurements
     - measured_fluxes: Measured flux values with uncertainties
     - measured_inst_MDVs: Time-course MDV measurements
@@ -19,11 +20,16 @@ from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 import pandas as pd
 
-from ..core.core import FluxomicsDataModel, Metadata, Model, Experiments
+from ..core.core import (
+    FluxomicsData,
+    Metadata,
+    MetabolicNetworkModel,
+    LabelingExperiments,
+)
 from ..core.common import DictList, TextualOrMath, ErrorModel
 from ..model.metabolite import Metabolite
 from ..model.reaction import Reaction
-from ..model.atom_mapping import AtomMapping
+from ..model.atom_mapping import AtomTransition
 from ..experiment.measurement import (
     Measurement,
     MeasurementModel,
@@ -40,48 +46,75 @@ from ..output.simulation import (
     FluxValue,
     MetaboliteSizeValue,
 )
+from ..experiment.tracer import Tracers, LabelComposition
+from ..model.constraint import Constraints, NetConstraints, ConstraintFormula
 
 
 class FreefluxParser:
     """Parser for Freeflux tabular format files (tsv/csv/xlsx).
 
-    Freeflux uses a set of tabular files to define metabolic networks and
-    experimental data for 13C metabolic flux analysis.
+    Freeflux uses a set of tabular files stored in a directory.  All files
+    in the set are optional except ``reactions.*``::
 
-    Example usage:
+        reactions.*          — network definition with atom transitions (required)
+        fluxes.*             — flux values (simulation / reference)
+        concentrations.*     — metabolite pool sizes
+        measured_MDVs.*      — steady-state mass distribution vectors
+        measured_fluxes.*    — measured flux values with uncertainties
+        measured_inst_MDVs.* — time-course MDV measurements
+
+    Supported file extensions: ``.tsv``, ``.csv``, ``.xlsx``.
+
+    Example::
+
         parser = FreefluxParser()
-        model = parser.parse("data/freeflux_test/toy")
-        # or
-        model = parser.parse("data/freeflux_test/ecoli/synthetic_data")
+        model = parser.parse("data/ecoli/")         # directory
+        model = parser.parse("data/ecoli/reactions.tsv")  # or the reactions file
+
+    atom transition notation
+    ---------------------
+    Compounds are written as ``Name(atoms)`` where *atoms* is a string of
+    lowercase letters.  Symmetric compounds (where two or more mappings are
+    equally valid) are expressed as comma-separated alternatives, e.g.
+    ``SUCC(abcd,dcba)``.  The parser generates the Cartesian product of all
+    variant combinations and creates a multi-map
+    :class:`~fluxomics_data_converter.AtomTransition`.
     """
 
     # File patterns for each data type
     FILE_PATTERNS = {
-        "reactions": "reactions",
-        "fluxes": "fluxes",
-        "concentrations": "concentrations",
-        "measured_MDVs": "measured_MDVs",
-        "measured_fluxes": "measured_fluxes",
-        "measured_inst_MDVs": "measured_inst_MDVs",
+        "reactions": ["reactions", "reaction"],
+        "fluxes": ["fluxes", "flux"],
+        "concentrations": ["concentrations", "concentration"],
+        "label_input": ["label_input", "label_inputs"],
+        "flux_bounds": ["flux_bounds", "flux_bound", "constraints", "constraint"],
+        "measured_MDVs": ["measured_MDVs", "measured_MDV", "measured_MID", "measured_MIDs"],
+        "measured_fluxes": ["measured_fluxes", "measured_flux"],
+        "measured_inst_MDVs": [
+            "measured_inst_MDVs",
+            "measured_inst_MDV",
+            "measured_inst_MID",
+            "measured_inst_MIDs",
+        ],
     }
 
     # Supported file extensions
     EXTENSIONS = [".tsv", ".csv", ".xlsx"]
 
     def __init__(self):
+        """Initialise parser state; call parse() to read files."""
         self._metabolites: Dict[str, Metabolite] = {}
         self._reactions: Dict[str, Reaction] = {}
-        self._atom_mappings: Dict[str, AtomMapping] = {}
+        self._atom_mappings: Dict[str, AtomTransition] = {}
 
-    def parse(self, base_path: str) -> FluxomicsDataModel:
-        """
-        Parse Freeflux files from a directory.
+    def parse(self, base_path: str) -> FluxomicsData:
+        """Parse Freeflux files from a directory.
 
         Args:
             base_path: Path to directory containing Freeflux files.
 
         Returns:
-            FluxomicsDataModel containing the parsed data
+            FluxomicsData containing the parsed data
         """
         base_path = Path(base_path)
 
@@ -97,7 +130,7 @@ class FreefluxParser:
         self._parse_reactions(reactions_path)
 
         # Build Model from parsed network
-        model = Model(
+        model = MetabolicNetworkModel(
             metabolites=DictList(list(self._metabolites.values())),
             reactions=DictList(list(self._reactions.values())),
             atom_mappings=self._atom_mappings,
@@ -106,6 +139,8 @@ class FreefluxParser:
         # Parse optional files
         fluxes = self._parse_fluxes(base_path)
         concentrations = self._parse_concentrations(base_path)
+        tracers = self._parse_label_input(base_path)
+        constraints = self._parse_flux_bounds(base_path)
         measurement = self._parse_measurements(base_path)
 
         # Create experiment if we have any experimental data
@@ -123,16 +158,16 @@ class FreefluxParser:
                 ),
             )
 
-        if measurement or simulation:
+        if measurement or simulation or tracers:
             # Determine if we have inst_MDVs (non-stationary)
             has_inst_mdvs = (
                 self._find_file(base_path, "measured_inst_MDVs") is not None
             )
 
-            experiment = Experiments(
+            experiment = LabelingExperiments(
                 name=base_path.name,
                 stationary=not has_inst_mdvs,
-                tracers=[],
+                tracers=tracers,
                 measurement=measurement,
                 simulation=simulation,
             )
@@ -144,19 +179,23 @@ class FreefluxParser:
             comment=f"Imported from Freeflux format: {base_path.name}",
         )
 
-        return FluxomicsDataModel(
+        return FluxomicsData(
             model=model,
-            info=metadata,
+            metadata=metadata,
             experiments=experiments,
+            constraints=constraints,
         )
 
     def _find_file(self, base_path: Path, file_type: str) -> Optional[Path]:
         """Find a file matching the pattern with any supported extension."""
-        pattern = self.FILE_PATTERNS[file_type]
-        for ext in self.EXTENSIONS:
-            file_path = base_path / f"{pattern}{ext}"
-            if file_path.exists():
-                return file_path
+        patterns = self.FILE_PATTERNS[file_type]
+        if isinstance(patterns, str):
+            patterns = [patterns]
+        for pattern in patterns:
+            for ext in self.EXTENSIONS:
+                file_path = base_path / f"{pattern}{ext}"
+                if file_path.exists():
+                    return file_path
         return None
 
     def _read_tabular(self, file_path: Path) -> pd.DataFrame:
@@ -179,14 +218,13 @@ class FreefluxParser:
         return df
 
     def _parse_reactions(self, filepath: Path) -> None:
-        """
-        Parse reactions file containing reaction network with atom mappings.
+        """Parse reactions file containing reaction network with atom transitions.
 
         Format:
         - #reaction_ID: Reaction identifier (section headers start with #)
         - substrate_IDs(atom) or reactant_IDs(atom): Substrates with
-          atom mapping
-        - product_IDs(atom): Products with atom mapping
+          atom transition
+        - product_IDs(atom): Products with atom transition
         - reversibility: 0 (irreversible) or 1 (reversible)
         """
         self._metabolites = {}
@@ -251,7 +289,7 @@ class FreefluxParser:
                         "yes",
                     )
 
-            # Parse substrates and products with atom mappings
+            # Parse substrates and products with atom transitions
             reactants, reactant_atoms = self._parse_compounds(substrates_str)
             products, product_atoms = self._parse_compounds(products_str)
 
@@ -269,7 +307,7 @@ class FreefluxParser:
             )
             self._reactions[rxn_id] = reaction
 
-            # Create atom mapping if atoms are specified (skip if
+            # Create atom transition if atoms are specified (skip if
             # there's an error)
             if reactant_atoms and product_atoms:
                 try:
@@ -283,14 +321,13 @@ class FreefluxParser:
                     if atom_mapping:
                         self._atom_mappings[rxn_id] = atom_mapping
                 except (ValueError, KeyError):
-                    # Skip reactions with invalid atom mappings
+                    # Skip reactions with invalid atom transitions
                     pass
 
     def _parse_compounds(
         self, compounds_str: str
     ) -> Tuple[List[str], List[Tuple[str, str]]]:
-        """
-        Parse compounds string with optional atom mappings.
+        """Parse compounds string with optional atom transitions.
 
         Args:
             compounds_str: String like "G6P(abcdef)+AcCoA(gh)" or
@@ -310,10 +347,10 @@ class FreefluxParser:
             if not part:
                 continue
 
-            # Match compound with optional atom mapping:
-            # "Compound(atoms)" or "123Compound(atoms)"
-            # Also handles stoichiometry like "2NADPH" or "0.5O2"
-            match = re.match(r"^([\d.]*)?(\S+?)(?:\(([^)]+)\))?$", part)
+            # Match compound with optional atom transition:
+            # "Compound(atoms)", "Compound (atoms)", or "123Compound(atoms)"
+            # \s* allows optional space before parentheses (Freeflux format)
+            match = re.match(r"^([\d.]*)?(\S+?)\s*(?:\(([^)]+)\))?$", part)
             if match:
                 match.group(1) or ""
                 cpd_id = match.group(2)
@@ -337,9 +374,8 @@ class FreefluxParser:
         products: List[str],
         reactant_atoms: List[Tuple[str, str]],
         product_atoms: List[Tuple[str, str]],
-    ) -> Optional[AtomMapping]:
-        """
-        Create AtomMapping from letter notation.
+    ) -> Optional[AtomTransition]:
+        """Create AtomTransition from letter notation.
 
         Handles symmetric compounds with comma-separated atom variants.
         """
@@ -354,11 +390,11 @@ class FreefluxParser:
                 rxn_id, reactants, products, reactant_atoms, product_atoms
             )
         else:
-            # Simple case: single atom mapping
-            atom_map = AtomMapping.parse_letter_notation(
+            # Simple case: single atom transition
+            atom_map = AtomTransition.parse_letter_notation(
                 reactant_atoms, product_atoms
             )
-            return AtomMapping(
+            return AtomTransition(
                 reaction_id=rxn_id,
                 reactants=reactants,
                 products=products,
@@ -373,8 +409,8 @@ class FreefluxParser:
         products: List[str],
         reactant_atoms: List[Tuple[str, str]],
         product_atoms: List[Tuple[str, str]],
-    ) -> AtomMapping:
-        """Create atom mapping with variants for symmetric compounds."""
+    ) -> AtomTransition:
+        """Create atom transition with variants for symmetric compounds."""
         from itertools import product as cartesian_product
 
         # Extract variants for each compound
@@ -409,7 +445,7 @@ class FreefluxParser:
                 p_items = list(p_combo) if p_combo else product_atoms
 
                 try:
-                    atom_map = AtomMapping.parse_letter_notation(
+                    atom_map = AtomTransition.parse_letter_notation(
                         r_items, p_items
                     )
                     map_id = (
@@ -441,10 +477,10 @@ class FreefluxParser:
                     reactants=old_rxn.reactants,
                     products=old_rxn.products,
                     reversibility=old_rxn.reversibility,
-                    atom_mapping_ids=list(maps_dict.keys()),
+                    atom_transition_ids=list(maps_dict.keys()),
                 )
 
-        return AtomMapping(
+        return AtomTransition(
             reaction_id=rxn_id,
             reactants=reactants,
             products=products,
@@ -463,9 +499,150 @@ class FreefluxParser:
             return flux_id.split("___")[0]
         return flux_id
 
-    def _parse_fluxes(self, base_path: Path) -> Optional[List[FluxValue]]:
+    def _parse_flux_bounds(
+        self, base_path: Path
+    ) -> Optional[Constraints]:
+        """Parse flux_bounds / constraints file.
+
+        Mirrors the Freeflux ``set_flux_bounds(fluxid, bounds=[lo, hi])`` API.
+
+        Format:
+        - #reaction_id: reaction ID, or the special value ``all`` (applies to
+          every reaction defined in the reactions file)
+        - lo: lower bound (leave blank for no lower bound)
+        - hi: upper bound (leave blank for no upper bound)
+
+        Each row produces up to two ``ConstraintFormula`` entries in
+        ``NetConstraints``:  ``reaction_id >= lo`` and ``reaction_id <= hi``.
         """
-        Parse fluxes file containing flux values.
+        filepath = self._find_file(base_path, "flux_bounds")
+        if not filepath:
+            return None
+
+        df = self._read_tabular(filepath)
+
+        col_map = {}
+        for col in df.columns:
+            col_lower = col.lower()
+            if "reaction" in col_lower and "id" in col_lower:
+                col_map["reaction_id"] = col
+            elif col_lower in ("lo", "lower", "min", "lb"):
+                col_map["lo"] = col
+            elif col_lower in ("hi", "upper", "max", "ub"):
+                col_map["hi"] = col
+
+        formulas: List[ConstraintFormula] = []
+
+        for _, row in df.iterrows():
+            rxn_id = str(row.get(col_map.get("reaction_id", ""), "")).strip()
+            if not rxn_id or rxn_id == "nan":
+                continue
+
+            lo_raw = row.get(col_map.get("lo", ""), None)
+            hi_raw = row.get(col_map.get("hi", ""), None)
+
+            lo = None if pd.isna(lo_raw) else float(lo_raw)
+            hi = None if pd.isna(hi_raw) else float(hi_raw)
+
+            # Expand 'all' to every reaction in the network
+            targets = (
+                list(self._reactions.keys())
+                if rxn_id.lower() == "all"
+                else [rxn_id]
+            )
+
+            for rid in targets:
+                if lo is not None:
+                    formulas.append(
+                        ConstraintFormula(expression=f"{rid} >= {lo}")
+                    )
+                if hi is not None:
+                    formulas.append(
+                        ConstraintFormula(expression=f"{rid} <= {hi}")
+                    )
+
+        if not formulas:
+            return None
+
+        return Constraints(net=NetConstraints(formulas=formulas))
+
+    def _parse_label_input(self, base_path: Path) -> List[Tracers]:
+        """Parse label_input file containing tracer labeling strategies.
+
+        Format (Freeflux set_labeling_strategy convention):
+        - #metabolite_ID: Substrate metabolite being labeled
+        - labeling_pattern: '0'=unlabeled, '1'=labeled (e.g. '010' for
+          2nd-carbon label). Comma-separated list for mixtures.
+        - percentage: Molar fraction [0, 1]. Comma-separated list.
+        - purity: Labeled atom purity [0, 1]. Comma-separated list.
+        - label_atom (optional): Element type, default 'C'.
+
+        Multiple rows for the same metabolite are merged into one Tracers
+        entry (each row becomes one LabelComposition).
+        """
+        filepath = self._find_file(base_path, "label_input")
+        if not filepath:
+            return []
+
+        df = self._read_tabular(filepath)
+
+        col_map = {}
+        for col in df.columns:
+            col_lower = col.lower()
+            if "metabolite" in col_lower and "id" in col_lower:
+                col_map["metabolite_id"] = col
+            elif "pattern" in col_lower:
+                col_map["labeling_pattern"] = col
+            elif "percent" in col_lower:
+                col_map["percentage"] = col
+            elif "purity" in col_lower:
+                col_map["purity"] = col
+            elif "atom" in col_lower:
+                col_map["label_atom"] = col
+
+        labels_by_metabolite: Dict[str, List[LabelComposition]] = defaultdict(list)
+
+        for _, row in df.iterrows():
+            metab_id = str(row.get(col_map.get("metabolite_id", ""), "")).strip()
+            if not metab_id or pd.isna(metab_id) or metab_id == "nan":
+                continue
+
+            pattern_str = str(
+                row.get(col_map.get("labeling_pattern", ""), "")
+            ).strip().strip("'\"")
+            pct_str = str(row.get(col_map.get("percentage", ""), "1.0")).strip()
+            purity_str = str(row.get(col_map.get("purity", ""), "1.0")).strip()
+
+            if not pattern_str or pattern_str == "nan":
+                continue
+
+            # Support comma-separated lists of patterns in a single cell
+            patterns = [p.strip().strip("'\"") for p in pattern_str.split(",")]
+            percentages = self._parse_comma_values(pct_str) or [1.0] * len(patterns)
+            purities = self._parse_comma_values(purity_str) or [1.0] * len(patterns)
+
+            # Pad if lengths don't match
+            while len(percentages) < len(patterns):
+                percentages.append(1.0)
+            while len(purities) < len(patterns):
+                purities.append(1.0)
+
+            for pattern, pct, purity in zip(patterns, percentages, purities):
+                labels_by_metabolite[metab_id].append(
+                    LabelComposition(
+                        labeled_pattern=pattern,
+                        fraction=float(pct),
+                        purity=float(purity),
+                    )
+                )
+
+        return [
+            Tracers(metabolite=metab_id, type="isotopomer", labels=labels)
+            for metab_id, labels in labels_by_metabolite.items()
+        ]
+
+    def _parse_fluxes(self, base_path: Path) -> Optional[List[FluxValue]]:
+        """Parse fluxes file containing flux values.
 
         Format:
         - #flux_ID: Flux identifier (e.g., "v1" or "v1_f", "v1_b" for
@@ -540,8 +717,7 @@ class FreefluxParser:
     def _parse_concentrations(
         self, base_path: Path
     ) -> Optional[List[MetaboliteSizeValue]]:
-        """
-        Parse concentrations file containing metabolite pool sizes.
+        """Parse concentrations file containing metabolite pool sizes.
 
         Format:
         - #metabolite_ID or #metab_ID: Metabolite identifier
@@ -581,8 +757,7 @@ class FreefluxParser:
         return metabolitesize_values if metabolitesize_values else None
 
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
-        """Parse measurement files (measured_MDVs, measured_fluxes,
-        measured_inst_MDVs)."""
+        """Parse measurement files (measured_MDVs, measured_fluxes, measured_inst_MDVs)."""
         # Parse steady-state MDV measurements
         labeling_measurement, labeling_data = self._parse_measured_mdvs(
             base_path
@@ -630,8 +805,7 @@ class FreefluxParser:
     def _parse_measured_mdvs(
         self, base_path: Path
     ) -> Tuple[Optional[LabelingMeasurement], Optional[List[Datum]]]:
-        """
-        Parse measured_MDVs file containing steady-state MDV measurements.
+        """Parse measured_MDVs file containing steady-state MDV measurements.
 
         Format:
         - #fragment_ID: Fragment identifier like "Glu_12345"
@@ -679,12 +853,19 @@ class FreefluxParser:
                 metabolite = fragment_id
                 positions = ""
 
-            # Create group if not exists
+            # Parse mean and sd values first so we know n_mdv for the expression
+            mean_values = self._parse_comma_values(mean_str)
+            sd_values = self._parse_comma_values(sd_str)
+
+            # Create group if not exists.
+            # Expression format: Metabolite[p1,p2,p3]#M0,1,...,N
+            # This is the x3cflux / 13CFlux2 convention for MS fragments.
             if fragment_id not in groups:
-                # Build expression for MS measurement
+                n_mdv = len(mean_values)
                 if positions:
-                    pos_list = "+".join(positions)
-                    expression = f"{metabolite}[{pos_list}]"
+                    pos_list = ",".join(positions)
+                    mdv_weights = ",".join(str(i) for i in range(n_mdv))
+                    expression = f"{metabolite}[{pos_list}]#M{mdv_weights}"
                 else:
                     expression = metabolite
 
@@ -693,10 +874,6 @@ class FreefluxParser:
                     scale="auto",
                     expression=TextualOrMath(textual=expression),
                 )
-
-            # Parse mean and sd values
-            mean_values = self._parse_comma_values(mean_str)
-            sd_values = self._parse_comma_values(sd_str)
 
             # Create datum for each MDV component (M0, M1, M2, ...)
             for i, (mean, sd) in enumerate(zip(mean_values, sd_values)):
@@ -717,8 +894,7 @@ class FreefluxParser:
     def _parse_measured_inst_mdvs(
         self, base_path: Path
     ) -> Tuple[Optional[LabelingMeasurement], Optional[List[Datum]]]:
-        """
-        Parse measured_inst_MDVs file containing time-course MDV measurements.
+        """Parse measured_inst_MDVs file containing time-course MDV measurements.
 
         Format:
         - #fragment_ID: Fragment identifier
@@ -828,8 +1004,7 @@ class FreefluxParser:
     def _parse_measured_fluxes(
         self, base_path: Path
     ) -> Tuple[Optional[FluxMeasurement], Optional[List[Datum]]]:
-        """
-        Parse measured_fluxes file containing flux measurements.
+        """Parse measured_fluxes file containing flux measurements.
 
         Format:
         - #reaction_ID: Reaction identifier
@@ -906,15 +1081,14 @@ class FreefluxParser:
         return values
 
 
-def parse_freeflux(base_path: str) -> FluxomicsDataModel:
-    """
-    Convenience function to parse Freeflux files.
+def parse_freeflux(base_path: str) -> FluxomicsData:
+    """Convenience function to parse Freeflux files.
 
     Args:
         base_path: Path to directory containing Freeflux files.
 
     Returns:
-        FluxomicsDataModel containing the parsed data
+        FluxomicsData containing the parsed data
     """
     parser = FreefluxParser()
     return parser.parse(base_path)

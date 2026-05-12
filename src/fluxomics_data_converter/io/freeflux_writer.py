@@ -1,8 +1,7 @@
-"""
-Freeflux tabular format writer for tsv/csv/xlsx files.
+"""Freeflux tabular format writer for tsv/csv/xlsx files.
 
-Writes FluxomicsDataModel to Freeflux tabular format files:
-    - reactions.tsv: Network definition with atom mappings
+Writes FluxomicsData to Freeflux tabular format files:
+    - reactions.tsv: Network definition with atom transitions
     - fluxes.tsv: Flux values (simulation/reference)
     - concentrations.tsv: Metabolite pool sizes
     - measured_MDVs.tsv: Steady-state mass distribution vector measurements
@@ -14,25 +13,47 @@ from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 from collections import defaultdict
 
-from ..core.core import FluxomicsDataModel, Experiments
-from ..model.atom_mapping import AtomMapping
+from ..core.core import FluxomicsData, LabelingExperiments
+from ..model.atom_mapping import AtomTransition
 from ..experiment.measurement import Datum
 
 
 class FreefluxWriter:
-    """Writer for Freeflux tabular format files (tsv/csv/xlsx)."""
+    """Serialiser for Freeflux tabular format files (TSV).
+
+    Writes a :class:`~fluxomics_data_converter.FluxomicsData` to the
+    Freeflux directory-based format.  The following files are produced
+    when the corresponding data is present:
+
+    - ``reactions.tsv``       — always written
+    - ``fluxes.tsv``          — when simulation variables exist
+    - ``concentrations.tsv``  — when pool-size variables exist
+    - ``measured_MDVs.tsv``   — when steady-state labelling data exists
+    - ``measured_inst_MDVs.tsv`` — when time-course labelling data exists
+    - ``measured_fluxes.tsv`` — when flux measurement data exists
+
+    Net/exchange fluxes are converted back to the Freeflux ``_f``/``_b``
+    (forward/backward) naming convention on write.
+
+    Example::
+
+        writer = FreefluxWriter()
+        writer.write(model, "output/ecoli/", experiment_name="default")
+        # or use the convenience function:
+        from fluxomics_data_converter.io import write_freeflux
+        write_freeflux(model, "output/ecoli/", experiment_name="default")
+    """
 
     def write(
         self,
-        model: FluxomicsDataModel,
+        model: FluxomicsData,
         output_dir: str,
         experiment_name: Optional[str] = None,
     ) -> None:
-        """
-        Write FluxomicsDataModel to Freeflux tabular files.
+        """Write FluxomicsData to Freeflux tabular files.
 
         Args:
-            model: FluxomicsDataModel to write
+            model: FluxomicsData to write
             output_dir: Directory to write files to
             experiment_name: Name of experiment to write (required if
                 multiple experiments exist)
@@ -51,9 +72,9 @@ class FreefluxWriter:
 
     def _resolve_experiment(
         self,
-        model: FluxomicsDataModel,
+        model: FluxomicsData,
         experiment_name: Optional[str],
-    ) -> Optional[Experiments]:
+    ) -> Optional[LabelingExperiments]:
         """Resolve which experiment to write."""
         if not model.experiments:
             return None
@@ -75,10 +96,8 @@ class FreefluxWriter:
             f"Please specify experiment_name."
         )
 
-    def _write_reactions(
-        self, model: FluxomicsDataModel, output_dir: Path
-    ) -> None:
-        """Write reactions.tsv with atom mappings."""
+    def _write_reactions(self, model: FluxomicsData, output_dir: Path) -> None:
+        """Write reactions.tsv with atom transitions."""
         lines = [
             "#reaction_ID\treactant_IDs(atom)\tproduct_IDs(atom)\treversibility"
         ]
@@ -98,8 +117,8 @@ class FreefluxWriter:
         filepath = output_dir / "reactions.tsv"
         filepath.write_text("\n".join(lines) + "\n")
 
-    def _format_side_from_mapping(self, am: AtomMapping, side: str) -> str:
-        """Format a reaction side from atom mapping notation.
+    def _format_side_from_mapping(self, am: AtomTransition, side: str) -> str:
+        """Format a reaction side from atom transition notation.
 
         Uses the letter notation directly from the mapping to preserve
         compound multiplicity (e.g., G3P(bdf)+G3P(cea) not
@@ -169,8 +188,8 @@ class FreefluxWriter:
 
     def _write_fluxes(
         self,
-        experiment: Experiments,
-        model: FluxomicsDataModel,
+        experiment: LabelingExperiments,
+        model: FluxomicsData,
         output_dir: Path,
     ) -> None:
         """Write fluxes.tsv from simulation variables.
@@ -254,20 +273,20 @@ class FreefluxWriter:
         filepath.write_text("\n".join(lines) + "\n")
 
     def _build_computational_to_base_map(
-        self, model: FluxomicsDataModel
+        self, model: FluxomicsData
     ) -> Dict[str, str]:
         """Map computational IDs (e.g., V4___1) back to base IDs (V4)."""
         mapping = {}
         for rxn in model.model.reactions:
-            if rxn.atom_mapping_ids:
-                for comp_id in rxn.atom_mapping_ids:
+            if rxn.atom_transition_ids:
+                for comp_id in rxn.atom_transition_ids:
                     mapping[comp_id] = rxn.id
             else:
                 mapping[rxn.id] = rxn.id
         return mapping
 
     def _write_concentrations(
-        self, experiment: Experiments, output_dir: Path
+        self, experiment: LabelingExperiments, output_dir: Path
     ) -> None:
         """Write concentrations.tsv from simulation variables."""
         if not experiment.simulation or not experiment.simulation.variables:
@@ -293,7 +312,7 @@ class FreefluxWriter:
         filepath.write_text("\n".join(lines) + "\n")
 
     def _write_measurements(
-        self, experiment: Experiments, output_dir: Path
+        self, experiment: LabelingExperiments, output_dir: Path
     ) -> None:
         """Write measurement files (measured_MDVs, measured_fluxes, etc.)."""
         if not experiment.measurement:
@@ -414,15 +433,14 @@ class FreefluxWriter:
 
 
 def write_freeflux(
-    model: FluxomicsDataModel,
+    model: FluxomicsData,
     output_dir: str,
     experiment_name: Optional[str] = None,
 ) -> None:
-    """
-    Convenience function to write FluxomicsDataModel to Freeflux files.
+    """Convenience function to write FluxomicsData to Freeflux files.
 
     Args:
-        model: FluxomicsDataModel to write
+        model: FluxomicsData to write
         output_dir: Directory to write files to
         experiment_name: Name of experiment to write (optional)
     """

@@ -1,7 +1,7 @@
-"""
-FluxML Data Model
+"""FluxML Data Model.
 
 A JAX-compatible Python library for handling FluxML data structures with:
+
 - Pydantic validation
 - JAX compatibility for numerical operations
 - Immutable data structures
@@ -9,13 +9,13 @@ A JAX-compatible Python library for handling FluxML data structures with:
 """
 
 from .model import (
-    FluxomicsDataModel,
+    FluxomicsData,
     Metadata,
-    Model,
-    Experiments,
+    MetabolicNetworkModel,
+    LabelingExperiments,
     Metabolite,
     Reaction,
-    AtomMapping,
+    AtomTransition,
     AtomMap,
     AtomAddress,
     Measurement,
@@ -37,13 +37,13 @@ from .io import parse_fluxml_file
 
 __version__ = "0.1.0"
 __all__ = [
-    "FluxomicsDataModel",
+    "FluxomicsData",
     "Metadata",
-    "Model",
-    "Experiments",
+    "MetabolicNetworkModel",
+    "LabelingExperiments",
     "Metabolite",
     "Reaction",
-    "AtomMapping",
+    "AtomTransition",
     "AtomMap",
     "AtomAddress",
     "Measurement",

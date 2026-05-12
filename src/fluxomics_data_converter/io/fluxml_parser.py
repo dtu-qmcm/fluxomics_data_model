@@ -1,5 +1,29 @@
-"""
-FluxML XML parser for reading FluxML files.
+"""Parser for FluxML XML files (13CFlux2 format).
+
+FluxML is a hierarchical XML format for ¹³C metabolic flux analysis.
+This module converts a ``.fml`` file into a
+:class:`~fluxomics_data_converter.FluxomicsData`.
+
+Entry point::
+
+    from fluxomics_data_converter.io import parse_fluxml_file, parse
+    model = parse_fluxml_file("ecoli.fml")
+    model = parse("ecoli.fml")              # auto-detect via unified API
+
+Encoding handling
+-----------------
+The parser attempts UTF-8, latin-1, iso-8859-1, and cp1252 in order before
+falling back to binary mode, because many real-world FluxML files are not
+strict UTF-8.
+
+Limitations
+-----------
+- MathML constraints are parsed structurally but raise
+  ``NotImplementedError`` when evaluated.
+- NMR (1H-NMR, 13C-NMR), MIMS, flux-ratio, and poolsize-ratio measurement
+  types are not parsed.
+- FluxML Level 3 multi-tracer labelling profiles are partially supported
+  (constant profiles only).
 """
 
 import logging
@@ -10,13 +34,13 @@ import re
 from itertools import product
 
 from ..model import (
-    FluxomicsDataModel,
+    FluxomicsData,
     Metadata,
-    Model,
-    Experiments,
+    MetabolicNetworkModel,
+    LabelingExperiments,
     Metabolite,
     Reaction,
-    AtomMapping,
+    AtomTransition,
     Variables,
     FluxValue,
     MetaboliteSizeValue,
@@ -48,16 +72,60 @@ logger = logging.getLogger(__name__)
 
 
 class FluxMLParser:
-    """Parser for FluxML XML files."""
+    """Parser for FluxML XML files (13CFlux2 format).
+
+    Reads a ``.fml`` file and converts it into a
+    :class:`~fluxomics_data_converter.FluxomicsData`.
+
+    Encoding handling
+    -----------------
+    Many real-world FluxML files are not strict UTF-8.  The parser tries
+    UTF-8, latin-1, iso-8859-1, and cp1252 in order before falling back to
+    binary mode, which lets the standard library infer the encoding.
+
+    Limitations
+    -----------
+    - MathML constraints are parsed structurally but raise
+      ``NotImplementedError`` when evaluated.
+    - NMR, MIMS, flux-ratio, and poolsize-ratio measurement types are not
+      parsed.
+    - FluxML Level 3 multi-tracer labelling profiles are partially
+      supported (constant profiles only).
+
+    Example::
+
+        parser = FluxMLParser()
+        model = parser.parse("models/ecoli.fml")
+        # or use the convenience function:
+        from fluxomics_data_converter.io import parse_fluxml_file
+        model = parse_fluxml_file("models/ecoli.fml")
+    """
 
     def __init__(self):
+        """Initialise the parser with FluxML and MathML namespace mappings."""
         self.namespaces = {
             "fluxml": "http://www.13cflux.net/fluxml",
             "mml": "http://www.w3.org/1998/Math/MathML",
         }
 
-    def parse_file(self, file_path: str) -> FluxomicsDataModel:
-        """Parse a FluxML file and return a FluxomicsDataModel object."""
+    def parse(self, file_path) -> FluxomicsData:
+        """Parse a FluxML file and return a :class:`FluxomicsData`.
+
+        This is the canonical method name required by the
+        :class:`~fluxomics_data_converter.io.base.FluxomicsParser` protocol.
+        ``parse_file`` is kept as a backward-compatible alias.
+
+        Args:
+            file_path: Path to the ``.fml`` (or ``.xml``) FluxML file.
+
+        Returns:
+            A fully validated :class:`~fluxomics_data_converter.FluxomicsData`.
+
+        Raises:
+            ValueError: If the file cannot be parsed (XML error, encoding
+                failure, or internal validation failure).
+            FileNotFoundError: If *file_path* does not exist.
+        """
         try:
             # Try to parse with different encodings
             encodings = ["utf-8", "latin-1", "iso-8859-1", "cp1252"]
@@ -88,7 +156,16 @@ class FluxMLParser:
         except Exception as e:
             raise ValueError(f"Error parsing {file_path}: {e}")
 
-    def _parse_fluxml(self, root: ET.Element) -> FluxomicsDataModel:
+    def parse_file(self, file_path) -> FluxomicsData:
+        """Backward-compatible alias for :meth:`parse`.
+
+        .. deprecated::
+            Use :meth:`parse` instead, which satisfies the
+            :class:`~fluxomics_data_converter.io.base.FluxomicsParser` protocol.
+        """
+        return self.parse(file_path)
+
+    def _parse_fluxml(self, root: ET.Element) -> FluxomicsData:
         """Parse the root fluxml element."""
         # Handle namespace prefix
         if root.tag.startswith("{"):
@@ -99,7 +176,7 @@ class FluxMLParser:
             ns_prefix = ""
 
         # Parse components
-        info = self._parse_info(root.find(f"{ns_prefix}info"))
+        metadata = self._parse_metadata(root.find(f"{ns_prefix}info"))
         model = self._parse_model(root.find(f"{ns_prefix}reactionnetwork"))
         constraints = self._parse_constraints(
             root.find(f"{ns_prefix}constraints")
@@ -110,29 +187,29 @@ class FluxMLParser:
         for exp_elem in root.findall(f"{ns_prefix}configuration"):
             experiments.append(self._parse_experiments(exp_elem))
 
-        return FluxomicsDataModel(
-            info=info,
+        return FluxomicsData(
+            metadata=metadata,
             model=model,
             constraints=constraints,
             experiments=experiments,
         )
 
-    def _parse_info(
-        self, info_elem: Optional[ET.Element]
+    def _parse_metadata(
+        self, metadata_elem: Optional[ET.Element]
     ) -> Optional[Metadata]:
-        """Parse info element."""
-        if info_elem is None:
+        """Parse metadata element."""
+        if metadata_elem is None:
             return None
 
         # Get namespace prefix
-        ns_prefix = self._get_namespace_prefix(info_elem)
+        ns_prefix = self._get_namespace_prefix(metadata_elem)
 
-        name = self._get_text(info_elem.find(f"{ns_prefix}name"))
-        version = self._get_text(info_elem.find(f"{ns_prefix}version"))
-        date_str = self._get_text(info_elem.find(f"{ns_prefix}date"))
-        comment = self._get_text(info_elem.find(f"{ns_prefix}comment"))
-        modeler = self._get_text(info_elem.find(f"{ns_prefix}modeler"))
-        strain = self._get_text(info_elem.find(f"{ns_prefix}strain"))
+        name = self._get_text(metadata_elem.find(f"{ns_prefix}name"))
+        version = self._get_text(metadata_elem.find(f"{ns_prefix}version"))
+        date_str = self._get_text(metadata_elem.find(f"{ns_prefix}date"))
+        comment = self._get_text(metadata_elem.find(f"{ns_prefix}comment"))
+        modeler = self._get_text(metadata_elem.find(f"{ns_prefix}modeler"))
+        strain = self._get_text(metadata_elem.find(f"{ns_prefix}strain"))
 
         # Parse date
         date = None
@@ -151,7 +228,7 @@ class FluxMLParser:
             strain=strain,
         )
 
-    def _parse_model(self, rn_elem: ET.Element) -> Model:
+    def _parse_model(self, rn_elem: ET.Element) -> MetabolicNetworkModel:
         """Parse reactionnetwork element into Model object."""
         if rn_elem is None:
             raise ValueError("reactionnetwork element is required")
@@ -171,7 +248,7 @@ class FluxMLParser:
             if metabolite.compartment:
                 compartments.add(metabolite.compartment)
 
-        # Parse reactions and collect atom mappings
+        # Parse reactions and collect atom transitions
         reactions = DictList[Reaction]()
         atom_mappings = {}
         for reaction_elem in rn_elem.findall(f"{ns_prefix}reaction"):
@@ -180,7 +257,7 @@ class FluxMLParser:
             if atom_mapping:
                 atom_mappings[reaction.id] = atom_mapping
 
-        return Model(
+        return MetabolicNetworkModel(
             metabolites=metabolites,
             reactions=reactions,
             atom_mappings=atom_mappings,
@@ -226,13 +303,13 @@ class FluxMLParser:
             raise ValueError("Reaction must have an id attribute")
 
         # Detect variant reactions: space-separated IDs like "SCS___1 SCS___2"
-        atom_mapping_ids = None
+        atom_transition_ids = None
         reaction_id = reaction_id
         if " " in reaction_id:
             # This is a variant reaction
-            atom_mapping_ids = reaction_id.split()
+            atom_transition_ids = reaction_id.split()
             # Extract base name from first variant (e.g., "SCS___1" -> "SCS")
-            reaction_id = atom_mapping_ids[0].split("___")[0]
+            reaction_id = atom_transition_ids[0].split("___")[0]
 
         reversibility = (
             reaction_elem.get("bidirectional", "true").lower() == "true"
@@ -308,7 +385,7 @@ class FluxMLParser:
                 if variants:
                     reactant_variants[reduct_id] = variants
 
-        # Build atom mapping if configurations exist
+        # Build atom transition if configurations exist
         atom_mapping = None
         if product_cfgs:
             # Build maps dict with atom_map_ids
@@ -316,7 +393,7 @@ class FluxMLParser:
             weights_dict = {}
 
             # Check if we have variants
-            if (product_variants or reactant_variants) and atom_mapping_ids:
+            if (product_variants or reactant_variants) and atom_transition_ids:
                 # Generate Cartesian product of all variant combinations
                 # Collect variant lists for both reactants and products
                 variant_compound_list = []
@@ -340,11 +417,11 @@ class FluxMLParser:
                     ]
                     all_combinations = list(product(*variant_lists))
 
-                    # If atom_mapping_ids doesn't match, derive from base name
-                    base_name = atom_mapping_ids[0].split("___")[0]
+                    # If atom_transition_ids doesn't match, derive from base name
+                    base_name = atom_transition_ids[0].split("___")[0]
                     expected_count = len(all_combinations)
-                    if len(atom_mapping_ids) != expected_count:
-                        atom_mapping_ids = [
+                    if len(atom_transition_ids) != expected_count:
+                        atom_transition_ids = [
                             f"{base_name}___{i + 1}"
                             for i in range(expected_count)
                         ]
@@ -385,19 +462,19 @@ class FluxMLParser:
                         if sample_cfg and re.search(
                             r"[A-Z]#\d+@\d+", sample_cfg
                         ):
-                            atom_map = AtomMapping.parse_fluxml_cfg(
+                            atom_map = AtomTransition.parse_fluxml_cfg(
                                 reactant_cfgs=dict(variant_reactant_cfgs),
                                 product_cfgs=variant_product_cfgs,
                                 reactant_order=reactants,
                             )
                         elif sample_cfg and re.search(r"[a-zA-Z]", sample_cfg):
-                            atom_map = AtomMapping.parse_letter_notation(
+                            atom_map = AtomTransition.parse_letter_notation(
                                 reactant_items=variant_reactant_cfgs,
                                 product_items=variant_product_cfgs,
                             )
 
                         if atom_map:
-                            map_id = atom_mapping_ids[variant_idx]
+                            map_id = atom_transition_ids[variant_idx]
                             maps_dict[map_id] = atom_map
                             if combination_weight is not None:
                                 weights_dict[map_id] = combination_weight
@@ -419,7 +496,7 @@ class FluxMLParser:
 
                     # Create mapping with all variants
                     if maps_dict:
-                        atom_mapping = AtomMapping(
+                        atom_mapping = AtomTransition(
                             reaction_id=reaction_id,
                             reactants=reactants,
                             products=products,
@@ -432,14 +509,14 @@ class FluxMLParser:
                 atom_map = None
                 if re.search(r"[A-Z]#\d+@\d+", sample_cfg):
                     # C#1@2 format
-                    atom_map = AtomMapping.parse_fluxml_cfg(
+                    atom_map = AtomTransition.parse_fluxml_cfg(
                         reactant_cfgs=dict(reactant_cfgs),
                         product_cfgs=product_cfgs,
                         reactant_order=reactants,
                     )
                 elif re.search(r"[a-zA-Z]", sample_cfg):
                     # Letter notation (abc format)
-                    atom_map = AtomMapping.parse_letter_notation(
+                    atom_map = AtomTransition.parse_letter_notation(
                         reactant_items=reactant_cfgs,
                         product_items=product_cfgs,
                     )
@@ -447,7 +524,7 @@ class FluxMLParser:
                 if atom_map:
                     # Use reaction_id as the atom_map_id for single map case
                     maps_dict = {reaction_id: atom_map}
-                    atom_mapping = AtomMapping(
+                    atom_mapping = AtomTransition(
                         reaction_id=reaction_id,
                         reactants=reactants,
                         products=products,
@@ -461,7 +538,7 @@ class FluxMLParser:
             annotations=annotations,
             reactants=reactants,
             products=products,
-            atom_mapping_ids=atom_mapping_ids,
+            atom_transition_ids=atom_transition_ids,
         ), atom_mapping
 
     def _parse_annotation(self, ann_elem: ET.Element) -> Annotation:
@@ -611,8 +688,10 @@ class FluxMLParser:
 
         return TextualOrMath(textual=textual, mathml=mathml)
 
-    def _parse_experiments(self, config_elem: ET.Element) -> Experiments:
-        """Parse configuration element into an Experiments object."""
+    def _parse_experiments(
+        self, config_elem: ET.Element
+    ) -> LabelingExperiments:
+        """Parse configuration element into a LabelingExperiments object."""
         name = config_elem.get("name")
         if not name:
             raise ValueError(
@@ -658,7 +737,7 @@ class FluxMLParser:
             else None
         )
 
-        return Experiments(
+        return LabelingExperiments(
             name=name,
             stationary=stationary,
             time=time,
@@ -1030,44 +1109,118 @@ class FluxMLParser:
         return Simulation(type=sim_type, method=method, variables=variables)
 
     def _parse_flux_value(self, flux_elem: ET.Element) -> FluxValue:
-        """Parse fluxvalue element."""
+        """Parse a ``<fluxvalue>`` element.
+
+        The text content is the *initial value* of the free flux parameter.
+        The optional ``lo``, ``hi``, and ``inc`` attributes carry the lower
+        bound, upper bound, and increment respectively. The ``ed-weight``
+        attribute (hyphenated in XML) maps to the ``edweight`` field.
+
+        Per the FluxML spec::
+
+            <fluxvalue flux="Glc_upt" type="net" ed-weight="0.8">2.234</fluxvalue>
+        """
         flux = flux_elem.get("flux")
         if not flux:
             raise ValueError("FluxValue must have a flux attribute")
 
         flux_type = flux_elem.get("type", "net")
 
-        # Get the value from element text
+        def _opt_float(attr: str) -> Optional[float]:
+            """Return float attribute value, or None if absent/unparseable."""
+            raw = flux_elem.get(attr)
+            if raw is None:
+                return None
+            try:
+                return float(raw.strip())
+            except ValueError:
+                return None
+
+        # Text content → initial value (not a bound).
+        value: Optional[float] = None
         value_str = flux_elem.text
-        if value_str:
+        if value_str and value_str.strip():
             try:
                 value = float(value_str.strip())
             except ValueError:
-                value = 0.0
-        else:
-            value = 0.0
+                value = None
 
-        return FluxValue(flux=flux, type=flux_type, lo=value)
+        lo = _opt_float("lo")
+        hi = _opt_float("hi")
+        inc = _opt_float("inc")
+        # FluxML uses "ed-weight" (hyphenated); also accept "edweight".
+        edweight_str = flux_elem.get("ed-weight") or flux_elem.get("edweight")
+        edweight = 1.0
+        if edweight_str:
+            try:
+                edweight = float(edweight_str.strip())
+            except ValueError:
+                pass
+
+        return FluxValue(
+            flux=flux,
+            type=flux_type,
+            value=value,
+            lo=lo,
+            hi=hi,
+            inc=inc,
+            edweight=edweight,
+        )
 
     def _parse_metabolite_size_value(
         self, met_elem: ET.Element
     ) -> MetaboliteSizeValue:
-        """Parse metabolitesizevalue element."""
+        """Parse a ``<poolsizevalue>`` element.
+
+        The text content is the *initial value* of the free pool-size
+        parameter.  The optional ``lo``, ``hi``, and ``inc`` attributes carry
+        the lower bound, upper bound, and increment respectively.
+
+        Per the FluxML spec::
+
+            <poolsizevalue pool="Ala" edweight="0.1">0.4654</poolsizevalue>
+        """
         pool = met_elem.get("pool")
         if not pool:
             raise ValueError("MetaboliteSizeValue must have a pool attribute")
 
-        # Get the value from element text
+        def _opt_float(attr: str) -> Optional[float]:
+            raw = met_elem.get(attr)
+            if raw is None:
+                return None
+            try:
+                return float(raw.strip())
+            except ValueError:
+                return None
+
+        # Text content → initial value (not a bound).
+        value: Optional[float] = None
         value_str = met_elem.text
-        if value_str:
+        if value_str and value_str.strip():
             try:
                 value = float(value_str.strip())
             except ValueError:
-                value = 0.0
-        else:
-            value = 0.0
+                value = None
 
-        return MetaboliteSizeValue(metabolite=pool, lo=value)
+        lo = _opt_float("lo")
+        hi = _opt_float("hi")
+        inc = _opt_float("inc")
+        edweight_str = met_elem.get("edweight") or met_elem.get("ed-weight")
+        edweight = 1.0
+        if edweight_str:
+            try:
+                edweight = float(edweight_str.strip())
+            except ValueError:
+                pass
+
+        return MetaboliteSizeValue(
+            metabolite=pool,
+            value=value,
+            lo=lo,
+            hi=hi,
+            inc=inc,
+            edweight=edweight,
+        )
 
     def _get_namespace_prefix(self, elem: ET.Element) -> str:
         """Get namespace prefix for element."""
@@ -1082,7 +1235,13 @@ class FluxMLParser:
         return elem.text.strip() if elem.text else None
 
 
-def parse_fluxml_file(file_path: str) -> FluxomicsDataModel:
-    """Parse a FluxML file and return a FluxML object."""
-    parser = FluxMLParser()
-    return parser.parse_file(file_path)
+def parse_fluxml_file(file_path: str) -> FluxomicsData:
+    """Convenience wrapper: parse a FluxML file and return a FluxomicsData.
+
+    Args:
+        file_path: Path to the ``.fml`` (or ``.xml``) FluxML file.
+
+    Returns:
+        A fully validated :class:`~fluxomics_data_converter.FluxomicsData`.
+    """
+    return FluxMLParser().parse(file_path)
