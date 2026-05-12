@@ -544,12 +544,19 @@ class FreefluxParser:
             lo = None if pd.isna(lo_raw) else float(lo_raw)
             hi = None if pd.isna(hi_raw) else float(hi_raw)
 
-            # Expand 'all' to every reaction in the network
-            targets = (
-                list(self._reactions.keys())
-                if rxn_id.lower() == "all"
-                else [rxn_id]
-            )
+            # Expand 'all' to every reaction in the network, including
+            # auto-generated drain reactions for sink metabolites.
+            if rxn_id.lower() == "all":
+                all_produced: set = set()
+                all_consumed: set = set()
+                for rxn in self._reactions.values():
+                    all_produced.update(rxn.products)
+                    all_consumed.update(rxn.reactants)
+                sink_mets = sorted(all_produced - all_consumed)
+                drain_ids = [f"{m}_out" for m in sink_mets]
+                targets = list(self._reactions.keys()) + drain_ids
+            else:
+                targets = [rxn_id]
 
             for rid in targets:
                 if lo is not None:

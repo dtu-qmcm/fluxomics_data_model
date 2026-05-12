@@ -125,6 +125,25 @@ class MTFWriter:
         if self._experiment and self._experiment.simulation:
             self._write_tvar(base_path.with_suffix(".tvar"))
 
+        self._write_opt(base_path.with_suffix(".opt"))
+
+    def _write_opt(self, filepath: Path) -> None:
+        """Write .opt file with influx_si command-line options.
+
+        --clownr and --zc handle near-zero fluxes at the starting point
+        (e.g. when the stored simulation values are not mass-balanced for
+        the chosen F/D parameterisation).  These are standard options used
+        by influx_si reference examples.
+        """
+        if filepath.exists():
+            return
+        lines = [
+            "Id\tComment\tName\tValue",
+            "\t\tcommandArgs\t--clownr 1.e-3 --zc 1.e-4",
+        ]
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+
     def _write_netw(self, filepath: Path) -> None:
         """Write .netw file containing reaction network with atom transitions.
 
@@ -573,22 +592,15 @@ class MTFWriter:
     def _compute_dependent_fluxes(self) -> set:
         """Determine which net fluxes should be Dependent (D) in .tvar.
 
-        influx_si requires that the D fluxes form a non-singular sub-matrix of
-        the stoichiometric matrix, and every internal metabolite's mass-balance
-        row must have at least one D flux.
-
-        Algorithm:
-        1. Exclude input/tracer pool metabolites from the mass-balance matrix.
-        2. Force all drain reactions (_out) to D — they have no other role.
-        3. Find which metabolite rows are already covered by drain D reactions.
-        4. For any uncovered metabolite rows, use QR with column pivoting on the
-           remaining (non-drain) reaction columns to select the minimal D set.
-        5. Return union of drain D + QR D.
+        Strategy: reactions with zero stored simulation value are D (they are
+        computed from mass balance); reactions with non-zero stored values are F
+        (they are the free parameters, matching the original model's intent).
+        Drain reactions are always D.  If the zero-valued reactions do not form
+        a valid (non-singular) basis, QR with column pivoting is used as a fallback.
         """
         import numpy as np
         from scipy.linalg import qr
 
-        # ── Build stoichiometric matrix ───────────────────────────────────────
         reactions = list(self._model.model.reactions)
         n_rxn = len(reactions)
         rxn_names = [r.id for r in reactions]
@@ -607,10 +619,10 @@ class MTFWriter:
         }
         sink_mets = sorted(all_produced - all_consumed - input_pools)
         drain_ids = [f"{m}_out" for m in sink_mets]
-
         all_rxn_names = rxn_names + drain_ids
         n_all = len(all_rxn_names)
 
+        # Build stoichiometric matrix (internal metabolites only)
         S = np.zeros((len(metabolites), n_all))
         for j, rxn in enumerate(reactions):
             for met_id in rxn.reactants:
@@ -623,52 +635,46 @@ class MTFWriter:
             if met_id in met_idx:
                 S[met_idx[met_id], n_rxn + k] -= 1.0
 
-        # ── Restrict to internal metabolite rows (exclude input/tracer pools) ─
         int_row_indices = [
             i for i, m in enumerate(metabolites) if m.id not in input_pools
         ]
-        if not int_row_indices:
-            return set(drain_ids)
-
         S_int = S[int_row_indices, :]
-        int_met_names = [metabolites[i].id for i in int_row_indices]
-        n_int = len(int_met_names)
+        n_int = len(int_row_indices)
 
-        # ── Step 1: drain reactions are always D ──────────────────────────────
-        drain_col_indices = set(range(n_rxn, n_all))
+        # Stored simulation values: zero-valued reactions are candidates for D
+        stored_vals: Dict[str, float] = {}
+        if self._experiment and self._experiment.simulation:
+            for fv in self._experiment.simulation.variables.flux_values:
+                stored_vals[fv.flux] = abs(fv.value or 0.0)
+
+        # D candidates: zero-valued reactions + drain reactions
+        threshold = 1e-9
         dependent: set = set(drain_ids)
+        for rxn_name in rxn_names:
+            if stored_vals.get(rxn_name, 0.0) <= threshold:
+                dependent.add(rxn_name)
 
-        # ── Step 2: find metabolite rows covered by drain D reactions ─────────
-        covered_rows: set = set()
-        for row_i, met_name in enumerate(int_met_names):
-            for drain_col in drain_col_indices:
-                if S_int[row_i, drain_col] != 0:
-                    covered_rows.add(row_i)
-                    break
+        # Validate: the D columns must span rank(S_int) rows
+        d_cols = [i for i, n in enumerate(all_rxn_names) if n in dependent]
+        rank_needed = int(np.linalg.matrix_rank(S_int)) if n_int > 0 else 0
 
-        uncovered_rows = [i for i in range(n_int) if i not in covered_rows]
-
-        if not uncovered_rows:
-            return dependent
-
-        # ── Step 3: QR on uncovered rows × non-drain columns ─────────────────
-        non_drain_cols = list(range(n_rxn))
-        S_uncov = S_int[np.ix_(uncovered_rows, non_drain_cols)]
-        n_uncov = len(uncovered_rows)
-
-        try:
-            _, _, perm = qr(S_uncov, pivoting=True)
-            rank_uncov = int(np.linalg.matrix_rank(S_uncov))
-            n_d_extra = min(rank_uncov, n_uncov)
-            for col_perm_idx in perm[:n_d_extra]:
-                dependent.add(all_rxn_names[non_drain_cols[col_perm_idx]])
-        except Exception:
-            # Fallback: designate first reaction for each uncovered metabolite
-            for row_i in uncovered_rows:
-                for col_j in non_drain_cols:
-                    if S_int[row_i, col_j] != 0:
-                        dependent.add(all_rxn_names[col_j])
-                        break
+        if len(d_cols) == 0 or int(np.linalg.matrix_rank(S_int[:, d_cols])) < rank_needed:
+            # Fallback: QR on uncovered rows to supplement D
+            covered: set = set()
+            for row_i in range(n_int):
+                if any(S_int[row_i, c] != 0 for c in d_cols):
+                    covered.add(row_i)
+            uncovered = [i for i in range(n_int) if i not in covered]
+            non_d_cols = [i for i in range(n_all) if i not in set(d_cols)]
+            if uncovered and non_d_cols:
+                S_uncov = S_int[np.ix_(uncovered, non_d_cols)]
+                try:
+                    _, _, perm = qr(S_uncov, pivoting=True)
+                    r_uncov = int(np.linalg.matrix_rank(S_uncov))
+                    for p in perm[:min(r_uncov, len(uncovered))]:
+                        dependent.add(all_rxn_names[non_d_cols[p]])
+                except Exception:
+                    pass
 
         return dependent
 
@@ -678,13 +684,11 @@ class MTFWriter:
         flux_values: list,
         drain_ids: list,
     ) -> Dict[str, float]:
-        """Compute mass-balanced starting values for all fluxes.
+        """Compute mass-balanced D starting values from stored F values.
 
-        Solves S[:,D]*v_D = -S[:,F]*v_F using the stored F starting values.
-        If the result has negative D values (infeasible for irreversible reactions),
-        falls back to uniform F values (all 1.0) and retries.
-
-        Returns a dict mapping flux_name -> starting_value.
+        Solves S[:,D]*v_D = -S[:,F]*v_F (S*v=0 with F values from simulation).
+        Any near-zero fluxes at the starting point are handled by influx_si's
+        --clownr option written to the .opt file.
         """
         import numpy as np
 
@@ -724,64 +728,59 @@ class MTFWriter:
         S_int = S[int_rows, :]
 
         stored = {fv.flux: (fv.value or 0.0) for fv in flux_values}
-
         d_cols = [i for i, n in enumerate(all_rxn_names) if n in dependent_ids]
         f_cols = [i for i, n in enumerate(all_rxn_names) if n not in dependent_ids]
         d_names = [all_rxn_names[i] for i in d_cols]
         f_names = [all_rxn_names[i] for i in f_cols]
 
-        def _solve(f_vals: Dict[str, float]) -> Dict[str, float]:
-            v_f = np.array([f_vals.get(n, 0.0) for n in f_names])
-            S_d = S_int[:, d_cols]
-            b = -S_int[:, f_cols] @ v_f
-            try:
-                v_d, *_ = np.linalg.lstsq(S_d, b, rcond=None)
-            except Exception:
-                v_d = np.zeros(len(d_cols))
-            result = {n: float(f_vals.get(n, 0.0)) for n in f_names}
-            result.update({d_names[i]: float(v_d[i]) for i in range(len(d_cols))})
-            return result
-
-        # Collect measured flux values from experiment (these are "pinned" F fluxes)
-        measured_values: Dict[str, float] = {}
+        # Measured flux values — used as fallback anchors
+        measured: Dict[str, float] = {}
         if (
             self._experiment
             and self._experiment.measurement
             and self._experiment.measurement.model.flux_measurement
             and self._experiment.measurement.data
         ):
-            data_lookup = {
-                d.id: d.value
-                for d in self._experiment.measurement.data.data
-            }
+            data_map = {d.id: d.value for d in self._experiment.measurement.data.data}
             for nf in self._experiment.measurement.model.flux_measurement.net_fluxes:
-                if nf.id in data_lookup and data_lookup[nf.id] is not None:
-                    measured_values[nf.id] = float(data_lookup[nf.id])
+                v = data_map.get(nf.id)
+                if v is not None:
+                    measured[nf.id] = float(v)
 
-        def _is_feasible(vals_: Dict[str, float]) -> bool:
-            return all(
-                vals_.get(n, 0.0) > 1e-9 or n not in drain_ids
-                for n in d_names
-            )
+        def _compute_d(f_vals: Dict[str, float]) -> Dict[str, float]:
+            v_f = np.array([f_vals.get(n, 0.0) for n in f_names])
+            try:
+                v_d, *_ = np.linalg.lstsq(
+                    S_int[:, d_cols], -S_int[:, f_cols] @ v_f, rcond=None
+                )
+            except Exception:
+                v_d = np.zeros(len(d_cols))
+            res = {n: float(f_vals.get(n, 0.0)) for n in f_names}
+            res.update({d_names[i]: float(v_d[i]) for i in range(len(d_cols))})
+            return res
 
-        f_stored = {n: stored.get(n, 0.0) for n in f_names}
-        vals = _solve(f_stored)
+        result = _compute_d({n: stored.get(n, 0.0) for n in f_names})
 
-        if not _is_feasible(vals):
-            # Fallback: use measured values for measured F, 0 for free F
-            f_fallback = {
-                n: measured_values.get(n, 0.0) for n in f_names
-            }
-            vals2 = _solve(f_fallback)
-            if _is_feasible(vals2):
-                vals = vals2
+        # If any D drain flux is ≤ 0, fall back: measured F values stay,
+        # non-measured free fluxes are set to 0 to get feasible D starting values.
+        drain_d = [n for n in d_names if n in drain_ids]
+        if any(result.get(n, 0.0) <= 1e-9 for n in drain_d):
+            f_fallback = {n: measured.get(n, 0.0) for n in f_names}
+            result2 = _compute_d(f_fallback)
+            if all(result2.get(n, 0.0) > 1e-9 for n in drain_d):
+                result = result2
 
-        return vals
+        return result
 
     def _write_tvar(self, filepath: Path) -> None:
         r"""Write .tvar file containing variable types and starting values.
 
         Format (TSV): Id\tComment\tName\tKind\tType\tValue
+
+        Type assignment (influx_si only supports F and D; C is reserved for
+        fluxes without measurements — measured fluxes must be F or D):
+          D — fluxes computed from F fluxes via S*v=0 mass balance
+          F — free parameters the optimizer searches over
         """
         lines = []
         lines.append("Id\tComment\tName\tKind\tType\tValue")
@@ -790,7 +789,7 @@ class MTFWriter:
             sim = self._experiment.simulation
 
             if sim.variables:
-                # Determine drain reactions (needed for balanced value computation)
+                # Drain reactions (auto-generated sinks)
                 all_consumed_: set = set()
                 all_produced_: set = set()
                 for rxn in self._model.model.reactions:
@@ -804,16 +803,17 @@ class MTFWriter:
                 sink_ids_ = sorted(all_produced_ - all_consumed_ - input_pools_)
                 drain_ids_ = [f"{m}_out" for m in sink_ids_]
 
+                # QR-based F/D assignment from stoichiometric null space
                 dependent_ids = self._compute_dependent_fluxes()
 
-                # Compute mass-balanced starting values
+                # Compute mass-balanced starting values (solve S[:,D]*v_D = -S[:,F]*v_F)
                 balanced = self._solve_balanced_starting_values(
                     dependent_ids,
                     sim.variables.flux_values,
                     drain_ids_,
                 )
 
-                # Write flux values
+                # Write flux rows (F or D only — C is not valid for any flux here)
                 for flux_val in sim.variables.flux_values:
                     flux_name = flux_val.flux
                     kind = "XCH" if flux_val.type == "xch" else "NET"

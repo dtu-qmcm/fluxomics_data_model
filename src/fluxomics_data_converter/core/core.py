@@ -331,6 +331,24 @@ class FluxomicsData(BaseModel):
         # Use computational reaction IDs for validation (includes variant IDs)
         computational_reaction_ids = self.model.computational_reaction_ids
 
+        # Also allow drain reactions auto-generated for sink metabolites
+        # (produced but never consumed and not an input pool). These are not
+        # stored in the model but are created during FML/MTF writing.
+        all_produced: set = set()
+        all_consumed: set = set()
+        for rxn in self.model.reactions:
+            all_produced.update(rxn.products)
+            all_consumed.update(rxn.reactants)
+        input_pools = frozenset(
+            t.metabolite
+            for exp in self.experiments
+            for t in exp.tracers
+        )
+        drain_ids = frozenset(
+            f"{m}_out" for m in (all_produced - all_consumed - input_pools)
+        )
+        valid_reaction_ids = computational_reaction_ids | drain_ids
+
         # Check experiment names are unique
         if len(self.experiments) > 1:
             experiments_names = [e.name for e in self.experiments]
@@ -351,8 +369,9 @@ class FluxomicsData(BaseModel):
             # Check simulation variable references
             if experiment.simulation and experiment.simulation.variables:
                 for flux_var in experiment.simulation.variables.flux_values:
-                    # Check against computational IDs (includes variants)
-                    if flux_var.flux not in computational_reaction_ids:
+                    # Check against computational IDs (includes variants) plus
+                    # auto-generated drain reactions for sink metabolites
+                    if flux_var.flux not in valid_reaction_ids:
                         raise ValueError(
                             f"Flux variable {flux_var.flux} in configuration "
                             f"{experiment.name} references unknown reaction"
