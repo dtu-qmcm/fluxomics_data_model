@@ -10,7 +10,7 @@ This document provides a comprehensive analysis of compatibility issues between 
 |----------------|-------|--------|
 | **Blocking (Cannot Convert)** | 3 | Multi-tracer, flux ratios, error models |
 | **Lossy (Information Loss)** | 8 | Experiment organization, metadata, grouping |
-| **Representational (Transformable)** | 9 | Atom mapping, symmetry, external metabolites |
+| **Representational (Transformable)** | 9 | atom transition, symmetry, external metabolites |
 
 **Key Finding**: FluxML is the most feature-rich format. Converting FROM FluxML to others will always lose information. Converting TO FluxML preserves all information.
 
@@ -20,7 +20,7 @@ This document provides a comprehensive analysis of compatibility issues between 
 
 These features exist in one format but CANNOT be represented in others. Conversion must either **fail** or **drop the feature with a warning**.
 
-### 1.1 Multi-Tracer Atom Mapping (FluxML v3.0 Only)
+### 1.1 Multi-Tracer atom transition (FluxML v3.0 Only)
 
 | Aspect | Details |
 |--------|---------|
@@ -46,17 +46,17 @@ class MultiTracerConversionError(ConversionError):
 def convert_fluxml_to_freeflux(model: FluxomicsModel) -> None:
     if model.has_multi_tracer_mapping():
         raise MultiTracerConversionError(
-            "Model contains multi-tracer atom mappings (13C + 15N/2H/18O). "
+            "Model contains multi-tracer atom transitions (13C + 15N/2H/18O). "
             "FreeFlux only supports 13C. Options:\n"
             "  1. Use --extract-carbon to export 13C-only subset\n"
             "  2. Convert to FluxML format instead"
         )
 
 # Option: Extract carbon-only subset
-def extract_carbon_mapping(mapping: ReactionAtomMapping) -> ReactionAtomMapping:
+def extract_carbon_mapping(mapping: ReactionAtomTransition) -> ReactionAtomTransition:
     """Extract only 13C transitions from multi-tracer mapping."""
     carbon_transitions = [t for t in mapping.transitions if t.atom_type == "C"]
-    return ReactionAtomMapping(
+    return ReactionAtomTransition(
         transitions=carbon_transitions,
         notation_type="lowercase",
         _warning="Multi-tracer mapping reduced to 13C only"
@@ -300,7 +300,7 @@ Similar to flux ratios - ratio measurements like `[Pyr]/[PEP] = 2.3 ± 0.2` cann
 
 These are equivalent representations that require transformation but no information loss.
 
-### 3.1 Atom Mapping Notation
+### 3.1 atom transition Notation
 
 | Format | Case | Example | Multi-substrate |
 |--------|------|---------|-----------------|
@@ -317,7 +317,7 @@ def convert_atom_mapping_notation(
     source_format: str,
     target_format: str
 ) -> str:
-    """Convert between atom mapping notations."""
+    """Convert between atom transition notations."""
     if source_format == "influx_si":
         # UPPERCASE -> lowercase
         mapping = mapping.lower()
@@ -662,7 +662,7 @@ def format_constraint(
 | Feature | FluxML | FreeFlux | influx_si | INCA |
 |---------|:------:|:--------:|:---------:|:----:|
 | **Basic Features** |
-| Reactions with atom mapping | ✓ | ✓ | ✓ | ✓ |
+| Reactions with atom transition | ✓ | ✓ | ✓ | ✓ |
 | Reversible reactions | ✓ | ✓ | ✓ | ✓ |
 | External metabolites | ✓ | ✓ | ✓ | ✓ |
 | MS measurements | ✓ | ✓ | ✓ | ✓ |
@@ -786,7 +786,7 @@ class ConversionReport:
     measurements_converted: int
 
     # Modifications
-    notation_changes: List[str]      # e.g., "Atom mapping: uppercase -> lowercase"
+    notation_changes: List[str]      # e.g., "atom transition: uppercase -> lowercase"
     structure_changes: List[str]     # e.g., "Symmetric reactions split"
 
     # Losses
@@ -830,11 +830,11 @@ class FluxomicsModel:
 
 ## 6. Test Cases for Compatibility
 
-### 6.1 Atom Mapping Round-Trip
+### 6.1 atom transition Round-Trip
 
 ```python
 def test_atom_mapping_round_trip():
-    """Test atom mapping conversion between all formats."""
+    """Test atom transition conversion between all formats."""
     original = "OAA(abcd)+AcCoA(ef) -> Cit(dcbfea)"
 
     # Parse as FreeFlux
@@ -891,7 +891,7 @@ def test_multi_experiment_split():
 
 | Converter | Complexity | Key Challenges |
 |-----------|------------|----------------|
-| Atom Mapping | Medium | Case conversion, InChI parsing |
+| atom transition | Medium | Case conversion, InChI parsing |
 | Symmetric Metabolites | High | Four different representations |
 | Labeling Input | Medium | Position ↔ binary conversion |
 | MS Fragments | Medium | Four different notations |
@@ -1486,9 +1486,9 @@ class SymmetryDefinition:
 
 
 @dataclass
-class AtomMapping:
+class AtomTransition:
     """
-    Atom mapping SEPARATE from symmetry.
+    atom transition SEPARATE from symmetry.
 
     Stores the canonical (non-scrambled) mapping.
     Symmetry variants are generated on-demand from SymmetryDefinition.
@@ -1498,7 +1498,7 @@ class AtomMapping:
     # Reference to metabolites with symmetry (not embedded)
     symmetric_metabolites: List[str] = field(default_factory=list)
 
-    def get_all_variants(self, symmetry_defs: Dict[str, SymmetryDefinition]) -> List['AtomMapping']:
+    def get_all_variants(self, symmetry_defs: Dict[str, SymmetryDefinition]) -> List['AtomTransition']:
         """Generate all symmetry variants using external symmetry definitions."""
         if not self.symmetric_metabolites:
             return [self]
@@ -1526,8 +1526,8 @@ class Reaction:
     reactants: List[ReactionParticipant]
     products: List[ReactionParticipant]
 
-    # Canonical atom mapping (no variants)
-    atom_mapping: Optional[AtomMapping] = None
+    # Canonical atom transition (no variants)
+    atom_mapping: Optional[AtomTransition] = None
 
     # Just references to symmetric metabolites involved
     # Actual symmetry defined at metabolite level
@@ -1612,15 +1612,15 @@ def parse_influx_si_symmetric(reactions: List[str], constraints: List[str], mode
 | **Validation** | Easy to check all reactions involving symmetric metabolite |
 | **Flexibility** | Can add/remove symmetry without touching reactions |
 
-### 12.5 Atom Mapping Separation Recommendation
+### 12.5 atom transition Separation Recommendation
 
-Similarly, atom mapping should be a separate entity:
+Similarly, atom transition should be a separate entity:
 
 ```python
 @dataclass
-class AtomMappingLibrary:
+class AtomTransitionLibrary:
     """
-    Central repository of atom mappings.
+    Central repository of atom transitions.
 
     Allows same mapping to be reused across:
     - Different representations (letter, InChI)
@@ -1628,13 +1628,13 @@ class AtomMappingLibrary:
     - Round-trip conversions
     """
 
-    # Mapping ID -> canonical AtomMapping
-    mappings: Dict[str, AtomMapping] = field(default_factory=dict)
+    # Mapping ID -> canonical AtomTransition
+    mappings: Dict[str, AtomTransition] = field(default_factory=dict)
 
     # Reaction ID -> Mapping ID (reference, not copy)
     reaction_mappings: Dict[str, str] = field(default_factory=dict)
 
-    def get_mapping_for_reaction(self, reaction_id: str) -> Optional[AtomMapping]:
+    def get_mapping_for_reaction(self, reaction_id: str) -> Optional[AtomTransition]:
         if reaction_id in self.reaction_mappings:
             mapping_id = self.reaction_mappings[reaction_id]
             return self.mappings.get(mapping_id)
@@ -1645,7 +1645,7 @@ class AtomMappingLibrary:
 
 ### 7.2 Priority Order
 
-1. **Critical Path**: Atom mapping → Reactions → Metabolites
+1. **Critical Path**: atom transition → Reactions → Metabolites
 2. **Measurements**: MS fragments → Labeling input → Flux/pool measurements
 3. **Advanced**: Symmetric metabolites → Constraints → Biomass
 4. **Polish**: Multi-experiment handling → Error models → Metadata

@@ -2,7 +2,7 @@
 
 The core module defines the top-level data structures.
 
-::: fluxomics_data_model.core.core.FluxomicsDataModel
+::: fluxomics_data_converter.core.core.FluxomicsData
     options:
       show_root_heading: true
       members:
@@ -11,10 +11,10 @@ The core module defines the top-level data structures.
         - constraints
         - experiments
 
-::: fluxomics_data_model.core.core.Metadata
+::: fluxomics_data_converter.core.core.Metadata
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.core.common.DictList
+::: fluxomics_data_converter.core.common.DictList
     options:
       show_root_heading: true

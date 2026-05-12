@@ -1,7 +1,7 @@
-# Fluxomics Data Model
+# Fluxomics Data Converter
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
-[![Tests](https://github.com/dtu-qmcm/fluxomics_data_model/actions/workflows/run_tests.yml/badge.svg)](https://github.com/dtu-qmcm/fluxomics_data_model/actions/workflows/run_tests.yml)
+[![Tests](https://github.com/dtu-qmcm/fluxomics_data_converter/actions/workflows/run_tests.yml/badge.svg)](https://github.com/dtu-qmcm/fluxomics_data_converter/actions/workflows/run_tests.yml)
 [![Supported Python versions: 3.12 and newer](https://img.shields.io/badge/python->=3.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -9,7 +9,7 @@ A universal Python library for converting and representing fluxomics data across
 
 ## Overview
 
-Fluxomics Data Model provides a unified data structure for representing metabolic network models, atom mappings, experimental configurations, and measurement data. It serves as a bridge between different fluxomics file formats, allowing researchers to:
+Fluxomics Data Converter provides a unified data structure for representing metabolic network models, atom transitions, experimental configurations, and measurement data. It serves as a bridge between different fluxomics file formats, allowing researchers to:
 
 - **Parse** models from FluxML (13CFlux), SBML, CSV/TSV sheets, and MTF (influx_si) formats
 - **Convert** between formats without data loss
@@ -40,8 +40,8 @@ pip install fluxomics-data-model
 
 ```bash
 # Clone the repository
-git clone https://github.com/dtu-qmcm/fluxomics_data_model.git
-cd fluxomics_data_model
+git clone https://github.com/dtu-qmcm/fluxomics_data_converter.git
+cd fluxomics_data_converter
 
 # Install with uv
 uv sync
@@ -56,10 +56,10 @@ uv sync
 
 ### Parsing files
 
-The library provides parsers for multiple formats. All parsers return a `FluxomicsDataModel` object:
+The library provides parsers for multiple formats. All parsers return a `FluxomicsData` object:
 
 ```python
-from fluxomics_data_model.io import parse_fluxml_file, parse_mtf, parse_freeflux
+from fluxomics_data_converter.io import parse_fluxml_file, parse_mtf, parse_freeflux
 
 # Parse a FluxML model (13CFlux2/13CFlux3)
 model = parse_fluxml_file("path/to/model.fml")
@@ -71,7 +71,7 @@ model = parse_mtf("path/to/model")  # reads .netw, .linp, .miso, etc.
 model = parse_freeflux("path/to/freeflux_dir")  # reads reactions.tsv, fluxes.tsv, etc.
 
 # Access model components
-print(f"Model: {model.info.name}")
+print(f"Model: {model.metadata.name}")
 print(f"Metabolites: {len(model.model.metabolites)}")
 print(f"Reactions: {len(model.model.reactions)}")
 print(f"Experiments: {model.experiments_names}")
@@ -85,7 +85,7 @@ reaction = model.model.reactions.get_by_id("PGI")
 print(f"Reaction: {reaction.id}")
 print(f"Reversible: {reaction.reversible}")
 
-# Get atom mapping for a reaction
+# Get atom transition for a reaction
 atom_mapping = model.model.atom_mappings["PGI"]
 print(atom_mapping.to_letter_notation())
 
@@ -98,7 +98,7 @@ for experiment in model.experiments:
 ### Working with constraints
 
 ```python
-from fluxomics_data_model.model import ConstraintEvaluator
+from fluxomics_data_converter.model import ConstraintEvaluator
 
 # Create evaluator with reaction IDs
 reaction_ids = model.model.reactions.ids
@@ -111,15 +111,15 @@ constraint_fn, operator, rhs = evaluator.parse_formula("uptGLC = 1.0")
 ## Project Structure
 
 ```
-fluxomics_data_model/
-├── src/fluxomics_data_model/
+fluxomics_data_converter/
+├── src/fluxomics_data_converter/
 │   ├── core/                    # Core data structures
-│   │   ├── core.py              # FluxomicsDataModel, Metadata, Model, Experiments
+│   │   ├── core.py              # FluxomicsData, Metadata, Model, Experiments
 │   │   └── common.py            # Shared utilities (DictList, Annotation, etc.)
 │   ├── model/                   # Metabolic network components
 │   │   ├── metabolite.py        # Metabolite definitions with atomic composition
 │   │   ├── reaction.py          # Reaction definitions with variant support
-│   │   ├── atom_mapping.py      # Atom mapping classes (AtomMapping, AtomMap)
+│   │   ├── atom_mapping.py      # atom transition classes (AtomTransition, AtomMap)
 │   │   ├── constraint.py        # Constraint definitions
 │   │   └── constraint_eval.py   # JAX-compatible constraint evaluation
 │   ├── experiment/              # Experimental data structures
@@ -151,12 +151,12 @@ fluxomics_data_model/
 The library uses a hierarchical data model built on [Pydantic](https://docs.pydantic.dev/) for validation and serialization:
 
 ```
-FluxomicsDataModel
+FluxomicsData
 ├── info: Metadata (name, version, modeler, strain, etc.)
 ├── model: Model
 │   ├── metabolites: DictList[Metabolite]
 │   ├── reactions: DictList[Reaction]
-│   ├── atom_mappings: Dict[str, AtomMapping]
+│   ├── atom_mappings: Dict[str, AtomTransition]
 │   ├── compartments: List[str]
 │   └── parameters: Dict[str, float]     # (planned) Growth rate, biomass coefficients
 ├── constraints: Constraints (net, exchange, metabolite size)
@@ -168,9 +168,9 @@ FluxomicsDataModel
 
 ## Features
 
-### Variant Atom Mapping Support
+### Variant atom transition Support
 
-Handles symmetric metabolites with multiple possible atom mappings:
+Handles symmetric metabolites with multiple possible atom transitions:
 
 ```python
 # Reactions with symmetric compounds generate variants
@@ -222,7 +222,7 @@ uv run pytest tests/
 ### Running tests with coverage
 
 ```bash
-uv run pytest tests/ --cov=fluxomics_data_model --cov-report=html
+uv run pytest tests/ --cov=fluxomics_data_converter --cov-report=html
 ```
 
 ### Linting
@@ -245,7 +245,7 @@ uv run mypy src/
 **Status**: ✅ Read implemented (with caveats)
 
 The Freeflux parser supports reading tabular models (TSV/CSV/XLSX):
-- `reactions.{tsv,csv,xlsx}` - Network definition with atom mappings (required)
+- `reactions.{tsv,csv,xlsx}` - Network definition with atom transitions (required)
 - `fluxes.{tsv,csv,xlsx}` - Flux values (optional)
 - `concentrations.{tsv,csv,xlsx}` - Metabolite pool sizes (optional)
 - `measured_MDVs.{tsv,csv,xlsx}` - Steady-state mass distribution vectors (optional)
@@ -255,7 +255,7 @@ The Freeflux parser supports reading tabular models (TSV/CSV/XLSX):
 **Known limitations**:
 - No tracers are parsed (FreeFlux specifies tracers via Python API, not files)
 - No constraints are parsed (FreeFlux defines constraints in code)
-- Metabolite atom counts are not available from file data (must be inferred from atom mappings)
+- Metabolite atom counts are not available from file data (must be inferred from atom transitions)
 - Export to FreeFlux format not yet implemented
 
 ---
@@ -268,15 +268,15 @@ The Freeflux parser supports reading tabular models (TSV/CSV/XLSX):
 - Parse SBML Level 2/3 models
 - Extract reaction stoichiometry and metabolite definitions
 - Handle compartments and species references
-- Note: SBML does not include atom mappings (requires separate annotation)
+- Note: SBML does not include atom transitions (requires separate annotation)
 
 **Implementation strategy**:
 ```python
-# Proposed module: src/fluxomics_data_model/io/sbml_parser.py
+# Proposed module: src/fluxomics_data_converter/io/sbml_parser.py
 from sbmlmath import SBMLMathModel
 
 class SBMLParser:
-    def parse(self, filepath: Path) -> FluxomicsDataModel
+    def parse(self, filepath: Path) -> FluxomicsData
     def _extract_metabolites(self, sbml_model) -> DictList[Metabolite]
     def _extract_reactions(self, sbml_model) -> DictList[Reaction]
 ```
@@ -290,7 +290,7 @@ class SBMLParser:
 **Status**: ✅ Implemented (read and write)
 
 The MTF parser supports reading and writing multi-file models for influx_si:
-- `.netw` - Network definition with reactions and atom mappings
+- `.netw` - Network definition with reactions and atom transitions
 - `.linp` - Label input (tracer specifications, binary isotopomer patterns)
 - `.miso` - MS isotopomer measurements (MS mass isotopomers and NMR/cumomer patterns)
 - `.mflux` - Flux measurements
@@ -301,7 +301,7 @@ The MTF parser supports reading and writing multi-file models for influx_si:
 
 **Usage**:
 ```python
-from fluxomics_data_model.io import parse_mtf, write_mtf
+from fluxomics_data_converter.io import parse_mtf, write_mtf
 
 # Read
 model = parse_mtf("path/to/model")
@@ -330,18 +330,18 @@ write_mtf(model, "path/to/output")
 **Implementation strategy**:
 ```python
 # Proposed modules:
-# src/fluxomics_data_model/io/inca_parser.py
+# src/fluxomics_data_converter/io/inca_parser.py
 class INCAParser:
-    def parse(self, filepath: Path) -> FluxomicsDataModel
+    def parse(self, filepath: Path) -> FluxomicsData
     def _parse_reactions(self, m_content: str) -> DictList[Reaction]
     def _parse_tracers(self, m_content: str) -> List[Tracers]
     def _parse_ms_data(self, m_content: str) -> Measurement
 
-# src/fluxomics_data_model/io/inca_writer.py
+# src/fluxomics_data_converter/io/inca_writer.py
 class INCAWriter:
-    def to_inca_model(self, model: FluxomicsDataModel) -> dict
-    def write_mat(self, model: FluxomicsDataModel, filepath: Path) -> None
-    def to_incawrapper(self, model: FluxomicsDataModel) -> "INCAModel"
+    def to_inca_model(self, model: FluxomicsData) -> dict
+    def write_mat(self, model: FluxomicsData, filepath: Path) -> None
+    def to_incawrapper(self, model: FluxomicsData) -> "INCAModel"
 ```
 
 **Priority**: High - INCA is widely used in the field
@@ -356,7 +356,7 @@ The FluxML writer exports models to FluxML XML format:
 
 **Usage**:
 ```python
-from fluxomics_data_model.io import write_fluxml
+from fluxomics_data_converter.io import write_fluxml
 
 # Write model to FluxML format
 write_fluxml(model, "path/to/output.fml")
@@ -364,7 +364,7 @@ write_fluxml(model, "path/to/output.fml")
 
 **Supported elements**:
 - Metadata (info element)
-- Reaction network with atom mappings
+- Reaction network with atom transitions
 - Constraints (NET, XCH, metabolite size)
 - Experimental configurations
 
@@ -382,12 +382,12 @@ write_fluxml(model, "path/to/output.fml")
 
 **Implementation strategy**:
 ```python
-# Proposed module: src/fluxomics_data_model/cli.py
+# Proposed module: src/fluxomics_data_converter/cli.py
 import click
 
 @click.group()
 def cli():
-    """Fluxomics Data Model - Universal format converter"""
+    """Fluxomics Data Converter - Universal format converter"""
     pass
 
 @cli.command()
@@ -428,12 +428,12 @@ def info(input_file):
 
 **Implementation strategy**:
 ```python
-# Proposed module: src/fluxomics_data_model/validation/
+# Proposed module: src/fluxomics_data_converter/validation/
 class ModelValidator:
     def validate_atom_balance(self, model: Model) -> List[ValidationError]
     def validate_stoichiometry(self, model: Model) -> List[ValidationError]
-    def validate_measurements(self, model: FluxomicsDataModel) -> List[ValidationError]
-    def validate_all(self, model: FluxomicsDataModel) -> ValidationReport
+    def validate_measurements(self, model: FluxomicsData) -> List[ValidationError]
+    def validate_all(self, model: FluxomicsData) -> ValidationReport
 ```
 
 **Priority**: High - prevents silent errors in analysis
@@ -496,7 +496,7 @@ parameters: Dict[str, float] = Field(
 
 - **36 failing unit tests** in `tests/test_unit/` — primarily in `test_freeflux_parser.py` (20 failures), `test_roundtrip.py` (6 failures), `test_atom_mapping.py` (6 failures)
 - **Pydantic V1 deprecation** — all models use `class Config: frozen = True` instead of `model_config = ConfigDict(frozen=True)`
-- **Variant reactions with reactant+product symmetry** — fixed for FluxML parser, but FreeFlux comma-separated symmetric notation and MTF symmetric products still only generate single-mapping AtomMappings
+- **Variant reactions with reactant+product symmetry** — fixed for FluxML parser, but FreeFlux comma-separated symmetric notation and MTF symmetric products still only generate single-mapping AtomTransitions
 - **Exchange flux measurements** — `ExchangeFlux` class exists but no parser populates `xch_fluxes`
 - **ErrorModel** — FluxML parser reads error models but does not store them
 - **FreeFlux models lack tracers** — no `labeling_strategy` file to read from; users must add tracers programmatically
@@ -536,11 +536,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you use this software in your research, please cite:
 
 ```bibtex
-@software{fluxomics_data_model,
+@software{fluxomics_data_converter,
   author = {QMCM Team},
-  title = {Fluxomics Data Model: Universal format converter for 13C-MFA},
+  title = {Fluxomics Data Converter: Universal format converter for 13C-MFA},
   year = {2025-2026},
-  url = {https://github.com/dtu-qmcm/fluxomics_data_model}
+  url = {https://github.com/dtu-qmcm/fluxomics_data_converter}
 }
 ```
 

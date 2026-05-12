@@ -12,10 +12,10 @@
 
 XML-based format used by 13CFlux2/13CFlux3. Supports the richest
 feature set including multiple experiments, NMR data, error models,
-and variant atom mappings.
+and variant atom transitions.
 
 ```python
-from fluxomics_data_model.io import parse_fluxml_file, write_fluxml
+from fluxomics_data_converter.io import parse_fluxml_file, write_fluxml
 
 model = parse_fluxml_file("model.fml")
 write_fluxml(model, "output.fml")
@@ -28,7 +28,7 @@ basename:
 
 | File | Description |
 |------|-------------|
-| `.netw` | Network with reactions and atom mappings |
+| `.netw` | Network with reactions and atom transitions |
 | `.linp` | Tracer specifications |
 | `.miso` | MS/NMR isotopomer measurements |
 | `.mflux` | Flux measurements |
@@ -38,7 +38,7 @@ basename:
 | `.opt` | Options |
 
 ```python
-from fluxomics_data_model.io import parse_mtf, write_mtf
+from fluxomics_data_converter.io import parse_mtf, write_mtf
 
 model = parse_mtf("path/to/model")  # reads all files
 write_mtf(model, "path/to/output", experiment_name="exp1")
@@ -60,7 +60,7 @@ Tabular format (TSV/CSV/XLSX). Parsed files:
     files. Parsed models will have empty tracers and no constraints.
 
 ```python
-from fluxomics_data_model.io import parse_freeflux
+from fluxomics_data_converter.io import parse_freeflux
 
 model = parse_freeflux("path/to/freeflux_dir")
 ```

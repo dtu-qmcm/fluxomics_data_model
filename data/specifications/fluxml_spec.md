@@ -19,7 +19,7 @@ FluxML is an XML-based standard for 13C metabolic flux analysis models, develope
 | v1.0 | Isotopically stationary 13C-MFA |
 | v1.1 | XML schema validation, flux ratios, error models, metadata attributes |
 | v2.0 | Non-stationary 13C-MFA, pool sizes, time-based measurements, substrate profiles |
-| v3.0 | Multi-tracer support (C, N, H, O, S), extended atom mapping |
+| v3.0 | Multi-tracer support (C, N, H, O, S), extended atom transition |
 
 ## Document Structure
 
@@ -144,7 +144,7 @@ Contains the metabolic network structure.
   <rproduct id="S7P" cfg="abfghij"/>
   <rproduct id="GAP" cfg="cde"/>
   <variant ratio="0.5">
-    <!-- Alternative atom mapping -->
+    <!-- Alternative atom transition -->
   </variant>
 </reaction>
 ```
@@ -154,7 +154,7 @@ Contains the metabolic network structure.
 | `id` | Unique reaction identifier | - |
 | `bidirectional` | Reversibility flag | `true` |
 
-**Atom Mapping Notations:**
+**atom transition Notations:**
 
 1. **Letter-based** (standard):
    ```xml

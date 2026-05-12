@@ -105,7 +105,7 @@ r = reaction({
 |--------|---------|
 | `<->` | Reversible reaction |
 | `->` | Irreversible reaction |
-| `(abc)` | Atom mapping (lowercase letters) |
+| `(abc)` | atom transition (lowercase letters) |
 | `+` | Multiple reactants/products |
 | `0.5 Met` | Stoichiometric coefficient |
 
@@ -120,7 +120,7 @@ r = reaction({
 });
 ```
 
-**Atom Mapping:**
+**atom transition:**
 - Uses lowercase letters: `a, b, c, d, e, f, ...`
 - Tracks carbon positions through reactions
 - Order in product shows where each reactant atom ends up
@@ -370,7 +370,7 @@ Typical organization in INCA files:
 
 When converting INCA to other formats:
 
-1. **Atom Mapping**: INCA uses lowercase letters (same as FreeFlux)
+1. **atom transition**: INCA uses lowercase letters (same as FreeFlux)
 2. **Flux Representation**: Extract from `m.rates.flx.val` array
 3. **Pool Sizes**: From `m.states.val` array
 4. **Symmetry**: Must be translated to format-specific notation

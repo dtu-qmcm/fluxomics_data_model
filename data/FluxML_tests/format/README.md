@@ -12,7 +12,7 @@ FluxML is published in Frontiers in Microbiology ([doi: 10.3389/fmicb.2019.01022
 ## Table of Contents
 * [Dictionary of XML Terms](#dictionary-of-xml-terms)
 * [The Basic Structure of FluxML Format](#the-basic-structure-of-fluxml-format)
-* [Network Structure and Atom Mappings](#network-structure-and-atom-mappings)  
+* [Network Structure and Atom Transitions](#network-structure-and-atom-mappings)  
 * [Global Stoichiometric Constraints](#global-stoichiometric-constraints)
 * [Different Configurations of Reaction Network](#different-configurations-of-reaction-network)  
   - [Input Mixture Specification](#input-mixture-specification)
@@ -118,7 +118,7 @@ XML Instance Representation:
 ```
 <!--In the following, a detailed description of each FluxML element will be followed in the next section.-->
 
-### Network Structure and Atom Mappings
+### Network Structure and Atom Transitions
 <p align="justify"> The next mandatory element is the <b>reactionnetwork</b> containing all information relating to the isotope network structure. This includes a list of metabolite pools which can be declared under the element <b>metabolitepools</b> and a set of reactions that can be specified by using the element <b>reaction</b>. The latter one can appear as many times as necessary to describe all reactions in the network; however, the metabolitepools can only appear once. The following fragment shows the XML instance representation of the element reactionnetwork:</p>
 
 ```xml
@@ -186,7 +186,7 @@ Support for scrambling reactions. A list of optional "variant" elements can be u
 </reaction>
 ```
 
-<p align="justify">  As veritable alternative for describing the atom transitions (or atom-atom mapping) between educts and products is the <a href="http://www.inchi-trust.org/">International Chemical Identifier (InChI)</a>, which gives a computer-generated unique character string for molecular structures. Figure 2 shows the INCHI atom numbering scheme as provided by the InChI software (http://www.inchi-trust.org/) as well as the carbon atom transitions for the aldolase reaction. The standard InChI string is widely accepted in the chemical community as the currently best approach for metabolite identification, facilitating database/web-search and information exchange. For more information please visit http://www.inchi-trust.org/.
+<p align="justify">  As veritable alternative for describing the atom transitions (or atom-atom transition) between educts and products is the <a href="http://www.inchi-trust.org/">International Chemical Identifier (InChI)</a>, which gives a computer-generated unique character string for molecular structures. Figure 2 shows the INCHI atom numbering scheme as provided by the InChI software (http://www.inchi-trust.org/) as well as the carbon atom transitions for the aldolase reaction. The standard InChI string is widely accepted in the chemical community as the currently best approach for metabolite identification, facilitating database/web-search and information exchange. For more information please visit http://www.inchi-trust.org/.
 </p>
 
 <p align="center"> <img src="images/atom_mappings_inchi.PNG"><br><b>Figure 2:</b> Visual carbon atom transitions of the Fructose-bisphosphate aldolase reaction</p>

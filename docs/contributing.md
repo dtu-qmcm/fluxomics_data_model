@@ -1,14 +1,14 @@
 # Contributing
 
 We welcome contributions! Please see
-[CONTRIBUTING.md](https://github.com/dtu-qmcm/fluxomics_data_model/blob/main/CONTRIBUTING.md)
+[CONTRIBUTING.md](https://github.com/dtu-qmcm/fluxomics_data_converter/blob/main/CONTRIBUTING.md)
 for guidelines.
 
 ## Development setup
 
 ```bash
-git clone https://github.com/dtu-qmcm/fluxomics_data_model.git
-cd fluxomics_data_model
+git clone https://github.com/dtu-qmcm/fluxomics_data_converter.git
+cd fluxomics_data_converter
 uv sync
 ```
 

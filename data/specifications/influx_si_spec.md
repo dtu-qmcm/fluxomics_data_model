@@ -15,7 +15,7 @@ influx_si uses Multiple TSV Files (MTF) format for 13C metabolic flux analysis.
 
 | Suffix | Required | Purpose |
 |--------|----------|---------|
-| `.netw` | Yes | Reaction network with atom mappings |
+| `.netw` | Yes | Reaction network with atom transitions |
 | `.linp` | Yes | Isotopic labeling inputs |
 | `.miso` | Yes | MS/NMR isotopomer measurements |
 | `.tvar` | No | Flux variable definitions |

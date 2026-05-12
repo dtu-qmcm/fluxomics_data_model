@@ -4,41 +4,41 @@ The IO module provides parsers and writers for different formats.
 
 ## Convenience functions
 
-::: fluxomics_data_model.io.parse_fluxml_file
+::: fluxomics_data_converter.io.parse_fluxml_file
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.io.write_fluxml
+::: fluxomics_data_converter.io.write_fluxml
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.io.parse_mtf
+::: fluxomics_data_converter.io.parse_mtf
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.io.write_mtf
+::: fluxomics_data_converter.io.write_mtf
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.io.parse_freeflux
+::: fluxomics_data_converter.io.parse_freeflux
     options:
       show_root_heading: true
 
 ## Parsers
 
-::: fluxomics_data_model.io.fluxml_parser.FluxMLParser
+::: fluxomics_data_converter.io.fluxml_parser.FluxMLParser
     options:
       show_root_heading: true
       members:
         - parse_file
 
-::: fluxomics_data_model.io.mtf_parser.MTFParser
+::: fluxomics_data_converter.io.mtf_parser.MTFParser
     options:
       show_root_heading: true
       members:
         - parse
 
-::: fluxomics_data_model.io.freeflux_parser.FreefluxParser
+::: fluxomics_data_converter.io.freeflux_parser.FreefluxParser
     options:
       show_root_heading: true
       members:
@@ -46,13 +46,13 @@ The IO module provides parsers and writers for different formats.
 
 ## Writers
 
-::: fluxomics_data_model.io.fluxml_writer.FluxMLWriter
+::: fluxomics_data_converter.io.fluxml_writer.FluxMLWriter
     options:
       show_root_heading: true
       members:
         - write
 
-::: fluxomics_data_model.io.mtf_writer.MTFWriter
+::: fluxomics_data_converter.io.mtf_writer.MTFWriter
     options:
       show_root_heading: true
       members:

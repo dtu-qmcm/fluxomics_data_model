@@ -15,7 +15,7 @@ FreeFlux uses tabular files (TSV/CSV/XLSX) for 13C metabolic flux analysis model
 
 | File | Required | Purpose |
 |------|----------|---------|
-| `reactions` | Yes | Metabolic network with atom mappings |
+| `reactions` | Yes | Metabolic network with atom transitions |
 | `fluxes` | No | Simulated/reference flux values |
 | `concentrations` | No | Metabolite pool sizes |
 | `measured_MDVs` | No | Steady-state labeling measurements |
@@ -33,8 +33,8 @@ Defines the metabolic reaction network with atom transition mappings.
 | Column | Description |
 |--------|-------------|
 | `#reaction_ID` | Unique reaction identifier |
-| `reactant_IDs(atom)` or `substrate_IDs(atom)` | Reactants with atom mapping |
-| `product_IDs(atom)` | Products with atom mapping |
+| `reactant_IDs(atom)` or `substrate_IDs(atom)` | Reactants with atom transition |
+| `product_IDs(atom)` | Products with atom transition |
 | `reversibility` | `0` = irreversible, `1` = reversible |
 
 **Example:**
@@ -49,14 +49,14 @@ v6	Fum(abcd,dcba)	OAA(abcd)	1
 v7	AKG(abcde)+CO2(f)	Glu(abcdef)	0
 ```
 
-#### Atom Mapping Conventions
+#### atom transition Conventions
 
 - **Lowercase letters**: `a, b, c, d, e, f, ...`
 - **Format**: `Metabolite(atom_mapping)`
 - **Multiple reactants/products**: Connected with `+`
 - **Symmetric molecules**: Comma-separated variants
 
-**Atom Mapping Examples:**
+**atom transition Examples:**
 
 | Pattern | Meaning |
 |---------|---------|
@@ -248,7 +248,7 @@ The parser should accept these variations:
 Model Structure:
 ├── reactions.tsv          → Defines network topology
 │   ├── Metabolites        (extracted from reactions)
-│   └── Atom mappings      (carbon tracking)
+│   └── Atom transitions      (carbon tracking)
 ├── fluxes.tsv             → Reference/simulated values
 ├── concentrations.tsv     → Pool sizes (non-stationary)
 └── Measurements

@@ -2,10 +2,10 @@
 
 ## Parsing files
 
-All parsers return a `FluxomicsDataModel` object:
+All parsers return a `FluxomicsData` object:
 
 ```python
-from fluxomics_data_model.io import (
+from fluxomics_data_converter.io import (
     parse_fluxml_file,
     parse_mtf,
     parse_freeflux,
@@ -25,14 +25,14 @@ model = parse_freeflux("path/to/freeflux_dir")
 
 ```python
 # Model info
-print(f"Model: {model.info.name}")
+print(f"Model: {model.metadata.name}")
 
 # Reactions
 reaction = model.model.reactions.get_by_id("PGI")
 print(f"Reaction: {reaction.id}")
 print(f"Reversible: {reaction.reversibility}")
 
-# Atom mapping
+# atom transition
 atom_mapping = model.model.atom_mappings["PGI"]
 print(atom_mapping.to_letter_notation())
 
@@ -45,7 +45,7 @@ for experiment in model.experiments:
 ## Writing files
 
 ```python
-from fluxomics_data_model.io import write_fluxml, write_mtf
+from fluxomics_data_converter.io import write_fluxml, write_mtf
 
 # Write to FluxML
 write_fluxml(model, "path/to/output.fml")
@@ -57,7 +57,7 @@ write_mtf(model, "path/to/output", experiment_name="exp1")
 ## Working with constraints
 
 ```python
-from fluxomics_data_model.model import ConstraintEvaluator
+from fluxomics_data_converter.model import ConstraintEvaluator
 
 reaction_ids = model.model.reactions.ids
 evaluator = ConstraintEvaluator(reaction_ids, parameters={"mu": 0.03})

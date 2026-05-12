@@ -2,30 +2,30 @@
 
 The experiment module defines tracer, measurement, and simulation data.
 
-::: fluxomics_data_model.experiment.tracer.Tracers
+::: fluxomics_data_converter.experiment.tracer.Tracers
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.experiment.tracer.LabelComposition
+::: fluxomics_data_converter.experiment.tracer.LabelComposition
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.experiment.measurement.Measurement
+::: fluxomics_data_converter.experiment.measurement.Measurement
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.experiment.measurement.LabelingMeasurement
+::: fluxomics_data_converter.experiment.measurement.LabelingMeasurement
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.experiment.measurement.FluxMeasurement
+::: fluxomics_data_converter.experiment.measurement.FluxMeasurement
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.output.simulation.Simulation
+::: fluxomics_data_converter.output.simulation.Simulation
     options:
       show_root_heading: true
 
-::: fluxomics_data_model.output.simulation.Variables
+::: fluxomics_data_converter.output.simulation.Variables
     options:
       show_root_heading: true

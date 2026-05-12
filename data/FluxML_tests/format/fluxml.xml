@@ -26,7 +26,7 @@
 
       (c) Salah Azzouzi, info(at)13cflux.net,   v3.0 
             + Multitracer-based MFA:
-              - extention of atom mapping mechanism to support multitracers
+              - extention of atom transition mechanism to support multitracers
               - defining additional atom specific informations in pool element (matching number of atoms, specify atom configuration)
               - specifying multitracer input substrate with extended purities
               - defining a new MS measurement type to support multiple isotope labeling experiment

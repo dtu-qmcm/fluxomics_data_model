@@ -1,4 +1,4 @@
-# Fluxomics Data Model
+# Fluxomics Data Converter
 
 A universal Python library for converting and representing fluxomics data
 across multiple formats. It enables seamless interoperability between
@@ -15,7 +15,7 @@ different 13C metabolic flux analysis (13C-MFA) software tools.
 ## Quick example
 
 ```python
-from fluxomics_data_model.io import parse_fluxml_file, parse_mtf
+from fluxomics_data_converter.io import parse_fluxml_file, parse_mtf
 
 # Parse a FluxML model
 model = parse_fluxml_file("path/to/model.fml")
@@ -38,7 +38,7 @@ pip install fluxomics-data-model
 Or for development:
 
 ```bash
-git clone https://github.com/dtu-qmcm/fluxomics_data_model.git
-cd fluxomics_data_model
+git clone https://github.com/dtu-qmcm/fluxomics_data_converter.git
+cd fluxomics_data_converter
 uv sync
 ```
