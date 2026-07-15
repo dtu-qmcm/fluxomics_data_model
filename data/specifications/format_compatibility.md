@@ -11,8 +11,11 @@ This document provides a comprehensive analysis of compatibility issues between 
 | **Blocking (Cannot Convert)** | 3 | Multi-tracer, flux ratios, error models |
 | **Lossy (Information Loss)** | 8 | Experiment organization, metadata, grouping |
 | **Representational (Transformable)** | 9 | atom transition, symmetry, external metabolites |
+| **Tool-algorithmic Differences** | 1 | ¹³C natural abundance correction |
 
 **Key Finding**: FluxML is the most feature-rich format. Converting FROM FluxML to others will always lose information. Converting TO FluxML preserves all information.
+
+> **New finding (verified 2026-05-12):** x3cflux applies ¹³C natural abundance correction internally (p=1.109%/C, hardcoded); freeflux, influx_si, and cmfa do **not**. This creates systematic flux bias when synthetic (no-NA) data is fed to x3cflux. See §13 for analysis and correction strategies.
 
 ---
 
@@ -280,11 +283,14 @@ Similar to flux ratios - ratio measurements like `[Pyr]/[PEP] = 2.3 ± 0.2` cann
 | **Measured flux constraint** | Yes | Code-only (`set_measured_flux`) | Yes (.mflux) | Yes |
 | **Non-linear** | Via MathML | No | No | No |
 
-**Problem**: FreeFlux has **no file-based constraints** and **no linear equality/inequality constraints**. It only supports:
-- Flux bounds via `set_flux_bounds()` Python API
+**Problem**: FreeFlux has **no linear equality/inequality constraints**. Bounds support is limited:
+- **File-based** (converter-usable): `constraints.tsv` with columns `#reaction_id lo hi`. The keyword `all` expands to every reaction in the network (including auto-generated drain reactions in the converted output).
+- **Code-based only**: `set_flux_bounds()` Python API (cannot be expressed in files for arbitrary reactions)
 - Soft equality via `set_measured_flux()` (measured values with SD)
 
-**Note**: FreeFlux's `set_concentration_bounds()` does NOT constrain optimization - it only sets initial guess sampling range.
+**Note**: FreeFlux's `set_concentration_bounds()` does NOT constrain optimization — it only sets initial guess sampling range.
+
+**Converter behaviour**: The `fluxomics_data_converter` reads `constraints.tsv` and maps bounds to both MTF `.cnstr` and FML `<textual>` constraints. The 'all' keyword is expanded to include auto-generated drain reactions (`{met}_out` for each sink metabolite) so that x3cflux and influx_si receive complete constraint sets.
 
 ### 2.8 Variable Classification (influx_si Exclusive)
 
@@ -1662,3 +1668,118 @@ class DataLossWarning(UserWarning): pass
 class FeatureDroppedWarning(DataLossWarning): pass
 class NotationSimplifiedWarning(DataLossWarning): pass
 ```
+
+---
+
+## 13. ¹³C Natural Abundance (NA) Correction — Tool-Algorithmic Difference
+
+**Verified 2026-05-12** via source code inspection of x3cflux (13CFlux2) and benchmarking against cmfa, freeflux, and influx_si on a common simple network.
+
+### 13.1 Which Tools Apply NA Correction?
+
+| Tool | NA correction | Where applied |
+|------|:---:|---|
+| **x3cflux (13CFlux2)** | ✓ Yes | Inside ODE — initial isotopomer state set to natural abundance fractions |
+| **freeflux** | ✗ No | — |
+| **influx_si** | ✗ No | — |
+| **cmfa** | ✗ No | — |
+| **isocor** | ~ Partial | Corrects H, O, S, N isotopes only; does NOT correct ¹³C NA |
+
+### 13.2 x3cflux Internal Mechanism
+
+Source: `src/main/cpp/model/system/NaturalLabelingInitializer.cpp`
+
+```cpp
+const static Real NATURAL_ABUNDANCE_CARBON   = 0.01109;  // 1.109% per C position
+const static Real NATURAL_ABUNDANCE_NITROGEN = 0.00115;
+const static Real NATURAL_ABUNDANCE_HYDROGEN = 0.00368;
+const static Real NATURAL_ABUNDANCE_OXYGEN   = 0.00205;
+```
+
+The initial labeling state of **every metabolite** in the network is set to natural
+abundance fractions before the ODE integrates to isotopic steady state. This is not a
+post-processing step on the final MID — it is a per-isotopomer, per-position correction
+applied throughout the network.
+
+### 13.3 Consequence for Format Conversion
+
+When synthetic MID data (e.g. from cmfa) is written to FML for x3cflux:
+- Synthetic data contains zero NA contribution
+- x3cflux's forward model adds NA internally
+- The optimiser fits fluxes where `EMU_predicted(with NA) = MID_synthetic(no NA)`
+- This gives **biased flux estimates**
+
+**Example (simple 6-reaction network, F[1,2,3] fragment):**
+
+| Metric | Without NA correction | With NA correction |
+|--------|:---:|:---:|
+| R3 estimate | ≈ 32 (true: 50) | ≈ 49.8 |
+| R5 estimate | ≈ 30 (true: 20) | ≈ 20.0 |
+| MID loss | 234.9 | ≈ 0.001 |
+
+### 13.4 Correction Strategies
+
+**Strategy A — Add NA to synthetic data before fitting x3cflux (recommended)**
+
+Apply the binomial correction matrix M_C to the measurement MID before writing FML:
+
+```
+M_C[i,j] = Binom(n_C - j,  i - j,  p)   for i >= j,  else 0
+```
+
+where `p = 0.01109` (x3cflux source constant) and `n_C` = number of carbons in the
+measured fragment.
+
+Using the `fluxomics_data_converter`:
+```python
+write_fluxml(model, "output.fml", apply_na_correction=True)
+```
+
+**Residual:** ~10⁻³ MID units. The binomial matrix is an approximation — the exact
+correction is network-dependent because x3cflux applies NA at the isotopomer level in the
+ODE, not as a final-MID transform. The effective p at the output MID is slightly
+different from 0.01109 (for this network, empirically ≈ 0.01060). For general networks,
+use `apply_na_correction=True` (p=0.01109) as a practical approximation.
+
+**Strategy B — Use x3cflux forward model to derive exact correction**
+
+1. Run x3cflux with `apply_na_correction=False` and true fluxes → get predicted MID with NA
+2. Use that NA-included MID as measurement data for fitting
+3. Residual: exactly 0
+
+This requires running x3cflux once as a forward simulator, which is beyond the converter
+scope but achieves a perfect correction.
+
+**Strategy C — Remove NA from x3cflux's predicted MID (for comparison only)**
+
+Apply M_C⁻¹ to x3cflux's predicted MID to obtain the NA-free MID comparable to cmfa/freeflux:
+
+```python
+M_C_inv = np.linalg.inv(M_C)
+mid_na_free = M_C_inv @ mid_x3cflux_predicted
+```
+
+Residual: ~8×10⁻⁵ (due to same binomial approximation).
+
+### 13.5 Conversion Recommendations
+
+| Scenario | Action |
+|----------|--------|
+| Real MS data → x3cflux | No correction needed (NA already in raw signal) |
+| Real MS data → freeflux / influx_si | No correction needed (these tools don't model NA) |
+| Synthetic data (cmfa) → x3cflux | Apply `apply_na_correction=True` or Strategy B |
+| Synthetic data (cmfa) → freeflux / influx_si | No correction needed |
+| Comparing x3cflux output to other tools | Apply M_C⁻¹ to x3cflux predictions (Strategy C) |
+| Real data → all tools for benchmarking | Feed identical raw data to all tools; bias is expected for non-x3cflux tools |
+
+### 13.6 Converter Implementation
+
+`fluxml_writer.py` — `FluxMLWriter.write()` parameter:
+```python
+write_fluxml(model, filepath, apply_na_correction=True)
+```
+
+- Applies binomial M_C (p=NATURAL_ABUNDANCE_CARBON=0.01109) to each MS measurement group
+- n_C inferred from the number of consecutive integer weights in each group
+- Error propagation: `new_sd = sqrt(M_C² @ old_sd²)`
+- Only applied to groups with sequential integer weights (skips NMR, flux measurements)

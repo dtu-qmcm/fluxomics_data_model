@@ -1,0 +1,15 @@
+xchflux (class=Double)
+A (R1) B = 0
+B (R2) D = 0
+D (R3) B = 0
+B (R4) R4 = 0
+R4 (R4) C = 0
+R4 (R4) E = 0
+B (R5) R5 = 0
+C (R5) R5 = 0
+R5 (R5) D = 0
+R5 (R5) E = 0
+R5 (R5) E = 0
+D (R6) F = 0
+E (E_out) E_ext = 0
+F (F_out) F_ext = 0

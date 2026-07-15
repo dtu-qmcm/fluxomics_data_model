@@ -1,0 +1,17 @@
+Id	Comment	Kind	Formula	Operator	Value
+		NET	R1	>=	0.0
+		NET	R1	<=	150.0
+		NET	R2	>=	0.0
+		NET	R2	<=	150.0
+		NET	R3	>=	0.0
+		NET	R3	<=	150.0
+		NET	R4	>=	0.0
+		NET	R4	<=	150.0
+		NET	R5	>=	0.0
+		NET	R5	<=	150.0
+		NET	R6	>=	0.0
+		NET	R6	<=	150.0
+		NET	E_out	>=	0.0
+		NET	E_out	<=	150.0
+		NET	F_out	>=	0.0
+		NET	F_out	<=	150.0

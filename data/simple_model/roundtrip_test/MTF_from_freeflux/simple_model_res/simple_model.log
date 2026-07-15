@@ -1,0 +1,43 @@
+"/home/te/Projects/data_model/fluxomics_data_model/.venv-MFA_Benchmarking/bin/influx_s.py" "--noopt" "--clownr" "1e-5" "--prefix" "simple_model"
+code gen: 2026-05-12 23:18:53
+executing: --vanilla --slave < simple_model.R"
+calcul  : 2026-05-12 23:18:53
+Following 36 inequalities are redundant and removed:
+	n:0.0<=R1
+	n:0.0<=R2
+	n:0.0<=R3
+	n:0.0<=R5
+	n:0.0<=R4
+	n:0.0<=R5
+	n:0.0<=R4
+	n:0.0<=R5
+	n:0.0<=F_out
+	n:0.0<=F_out
+	n:0.0<=R6
+	n:0.0<=E_out
+	n:0.0<=F_out
+	n:0.0<=R6
+	n:150.0>=R6
+	n:0.0<=R6
+	n:150.0>=R5
+	n:0.0<=R5
+	n:0.0<=R1
+	n:0.0<=R2
+	n:0.0<=R3
+	n:0.0<=R4
+	n:0.0<=R4
+	n:0.0<=R4
+	n:0.0<=R5
+	n:0.0<=R5
+	n:0.0<=R6
+	n:0.0<=R6
+	n:0.0<=R6
+	n:0.0<=E_out
+	n:0.0<=F_out
+	n:0.0<=F_out
+	n:150.0>=F_out
+	n:0.0<=F_out
+	n:150.0>=R4
+	n:0.0<=R4
+Starting point
+end     : 2026-05-12 23:18:55
