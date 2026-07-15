@@ -1,0 +1,4 @@
+# Created by 'ftbl2mtf e_coli.ftbl -o mtf/' at 2022-05-25 17:04:34 CEST +0200
+Id	Comment	Name	Value
+		commandArgs	--TIMEIT --clownr=1.e-5 --seed=3333 --ffguess --irand --sln --zc=1.e-4
+		posttreat_R	plot_smeas.R

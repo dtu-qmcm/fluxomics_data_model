@@ -1,0 +1,67 @@
+Id	Comment	Specie	Fragment	Dataset	Isospecies	Value	SD	Time
+		F	1,2,3	MS-1	M0	NA	0.01	
+		F	1,2,3	MS-1	M1	NA	0.01	
+		F	1,2,3	MS-1	M2	NA	0.01	
+		F	1,2,3	MS-1	M3	NA	0.01	
+
+		F	1,2,3	C13NMR	010	NA	0.01	
+		F	1,2,3	C13NMR	110	NA	0.01	
+		F	1,2,3	C13NMR	011	NA	0.01	
+		F	1,2,3	C13NMR	111	NA	0.01	
+
+		E	1,2,3	MS-1	M0	NA	0.01	
+		E	1,2,3	MS-1	M1	NA	0.01	
+		E	1,2,3	MS-1	M2	NA	0.01	
+		E	1,2,3	MS-1	M3	NA	0.01	
+
+		E	1,2,3	NMR	1xx	NA	0.01	
+		E	1,2,3	NMR	0xx	NA	0.01	
+
+		E	1	MS-2	M0	NA	0.01	
+		E	1	MS-2	M1	NA	0.01	
+
+		K	1	MS-2	M0	NA	0.01	
+		K	1	MS-2	M1	NA	0.01	
+# Comment these values to make v3 exchange not identifiable		
+		C	1	MS-2	M0	NA	0.01	
+		C	1	MS-2	M1	NA	0.01	
+        
+		C	1,2,3	MS-1	M0	NA	0.01	
+		C	1,2,3	MS-1	M1	NA	0.01	
+		C	1,2,3	MS-1	M2	NA	0.01	
+		C	1,2,3	MS-1	M3	NA	0.01	
+
+		B	1,2,3	MS-1	M0	NA	0.01	
+		B	1,2,3	MS-1	M1	NA	0.01	
+		B	1,2,3	MS-1	M2	NA	0.01	
+		B	1,2,3	MS-1	M3	NA	0.01	
+
+		D	1,2,3	MS-1	M0	NA	0.01	
+		D	1,2,3	MS-1	M1	NA	0.01	
+		D	1,2,3	MS-1	M2	NA	0.01	
+		D	1,2,3	MS-1	M3	NA	0.01	
+
+		K	1,2,3	MS-1	M0	NA	0.01	
+		K	1,2,3	MS-1	M1	NA	0.01	
+		K	1,2,3	MS-1	M2	NA	0.01	
+		K	1,2,3	MS-1	M3	NA	0.01	
+
+		H	1,2,3,4,5	MS-1	M0	NA	0.01	
+		H	1,2,3,4,5	MS-1	M1	NA	0.01	
+		H	1,2,3,4,5	MS-1	M2	NA	0.01	
+		H	1,2,3,4,5	MS-1	M3	NA	0.01	
+		H	1,2,3,4,5	MS-1	M4	NA	0.01	
+		H	1,2,3,4,5	MS-1	M5	NA	0.01	
+
+		I	1,2,3,4,5,6	MS-1	M0	NA	0.01	
+		I	1,2,3,4,5,6	MS-1	M1	NA	0.01	
+		I	1,2,3,4,5,6	MS-1	M2	NA	0.01	
+		I	1,2,3,4,5,6	MS-1	M3	NA	0.01	
+		I	1,2,3,4,5,6	MS-1	M4	NA	0.01	
+		I	1,2,3,4,5,6	MS-1	M5	NA	0.01	
+		I	1,2,3,4,5,6	MS-1	M6	NA	0.01	
+
+		E+B	1,2,3	MS-1	M0	NA	0.01	
+		E+B	1,2,3	MS-1	M1	NA	0.01	
+		E+B	1,2,3	MS-1	M2	NA	0.01	
+		E+B	1,2,3	MS-1	M3	NA	0.01	

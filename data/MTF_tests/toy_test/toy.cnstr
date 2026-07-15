@@ -1,0 +1,6 @@
+Id	Comment	Kind	Formula	Operator	Value
+		NET	V18-0.02*BIOMASS_YIELD	==	0
+		NET	V19-0.03*BIOMASS_YIELD	==	0
+		NET	V1	==	1
+#		NET	V4	>=	0.2
+		NET	V4_1 - V4_2	==	0
