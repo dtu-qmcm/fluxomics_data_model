@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<fluxml xmlns="http://www.13cflux.net/fluxml">
+  <info>
+    <date>2026-05-12 23:18:53</date>
+    <comment>Imported from MTF format: simple_model</comment>
+  </info>
+  <reactionnetwork>
+    <metabolitepools>
+      <pool id="A" atoms="3"/>
+      <pool id="B" atoms="3"/>
+      <pool id="D" atoms="3"/>
+      <pool id="C" atoms="2"/>
+      <pool id="E" atoms="1"/>
+      <pool id="F" atoms="3"/>
+      <pool id="E_ext" atoms="1"/>
+      <pool id="F_ext" atoms="3"/>
+    </metabolitepools>
+    <reaction id="R1" bidirectional="false">
+      <reduct id="A" cfg="C#1@1 C#2@1 C#3@1"/>
+      <rproduct id="B" cfg="C#1@1 C#2@1 C#3@1"/>
+    </reaction>
+    <reaction id="R2" bidirectional="false">
+      <reduct id="B" cfg="C#1@1 C#2@1 C#3@1"/>
+      <rproduct id="D" cfg="C#1@1 C#2@1 C#3@1"/>
+    </reaction>
+    <reaction id="R3" bidirectional="false">
+      <reduct id="D" cfg="C#1@1 C#2@1 C#3@1"/>
+      <rproduct id="B" cfg="C#1@1 C#2@1 C#3@1"/>
+    </reaction>
+    <reaction id="R4" bidirectional="false">
+      <reduct id="B" cfg="C#1@1 C#2@1 C#3@1"/>
+      <rproduct id="C" cfg="C#2@1 C#3@1"/>
+      <rproduct id="E" cfg="C#1@1"/>
+    </reaction>
+    <reaction id="R5" bidirectional="false">
+      <reduct id="B" cfg="C#1@1 C#2@1 C#3@1"/>
+      <reduct id="C" cfg="C#1@2 C#2@2"/>
+      <rproduct id="D" cfg="C#2@1 C#3@1 C#1@2"/>
+      <rproduct id="E" cfg="C#1@1"/>
+      <rproduct id="E" cfg="C#2@2"/>
+    </reaction>
+    <reaction id="R6" bidirectional="false">
+      <reduct id="D" cfg="C#1@1 C#2@1 C#3@1"/>
+      <rproduct id="F" cfg="C#1@1 C#2@1 C#3@1"/>
+    </reaction>
+    <reaction id="E_out" bidirectional="false">
+      <reduct id="E" cfg="C#1@1"/>
+      <rproduct id="E_ext" cfg="C#1@1"/>
+    </reaction>
+    <reaction id="F_out" bidirectional="false">
+      <reduct id="F" cfg="C#1@1 C#2@1 C#3@1"/>
+      <rproduct id="F_ext" cfg="C#1@1 C#2@1 C#3@1"/>
+    </reaction>
+  </reactionnetwork>
+  <constraints>
+    <net>
+      <textual>R1 &gt;= 0.0;
+R1 &lt;= 150.0;
+R2 &gt;= 0.0;
+R2 &lt;= 150.0;
+R3 &gt;= 0.0;
+R3 &lt;= 150.0;
+R4 &gt;= 0.0;
+R4 &lt;= 150.0;
+R5 &gt;= 0.0;
+R5 &lt;= 150.0;
+R6 &gt;= 0.0;
+R6 &lt;= 150.0;
+E_out &gt;= 0.0;
+E_out &lt;= 150.0;
+F_out &gt;= 0.0;
+F_out &lt;= 150.0</textual>
+    </net>
+  </constraints>
+  <configuration name="simple_model" stationary="true">
+    <input pool="A" type="isotopomer">
+      <label cfg="010">1.0</label>
+    </input>
+    <measurement>
+      <mlabel>
+        <date>2026-05-12 23:18:53</date>
+      </mlabel>
+      <model>
+        <labelingmeasurement>
+          <group id="F_123" scale="auto">
+            <textual>F[1-3]#M0,1,2,3</textual>
+          </group>
+        </labelingmeasurement>
+        <fluxmeasurement>
+          <netflux id="R1">
+            <textual>R1</textual>
+          </netflux>
+        </fluxmeasurement>
+      </model>
+      <data>
+        <dlabel>
+          <date>2026-05-12 23:18:53</date>
+        </dlabel>
+        <datum id="F_123" stddev="8.06959445e-06" weight="0">6.14030223e-05</datum>
+        <datum id="F_123" stddev="2.22344466e-02" weight="1">7.83101556e-01</datum>
+        <datum id="F_123" stddev="2.24458825e-02" weight="2">2.13650679e-01</datum>
+        <datum id="F_123" stddev="2.78363138e-04" weight="3">3.18636173e-03</datum>
+        <datum id="R1" stddev="0.1">100.0</datum>
+      </data>
+    </measurement>
+    <simulation method="auto" type="full">
+      <variables>
+        <fluxvalue flux="R1" type="F">100.0</fluxvalue>
+        <fluxvalue flux="R2" type="F">110.0</fluxvalue>
+        <fluxvalue flux="R3" type="F">50.0</fluxvalue>
+        <fluxvalue flux="R4" type="net">20.00000000000001</fluxvalue>
+        <fluxvalue flux="R5" type="net">19.999999999999993</fluxvalue>
+        <fluxvalue flux="R6" type="net">79.99999999999996</fluxvalue>
+        <fluxvalue flux="E_out" type="net">60.000000000000014</fluxvalue>
+        <fluxvalue flux="F_out" type="net">79.99999999999997</fluxvalue>
+      </variables>
+    </simulation>
+  </configuration>
+</fluxml>

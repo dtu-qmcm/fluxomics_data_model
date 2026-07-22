@@ -1,0 +1,13 @@
+# Created by 'txt2ftbl --prefix simple_model'
+# Date: 2026-05-12 23:18:56 CEST +0200
+# influx_si version: 7.4.3
+# If edited by hand, remove these comments.
+Id	Comment	Name	Kind	Type	Value
+		E_out	XCH	C	0
+		F_out	XCH	C	0
+		R1	XCH	C	0
+		R2	XCH	C	0
+		R3	XCH	C	0
+		R4	XCH	C	0
+		R5	XCH	C	0
+		R6	XCH	C	0

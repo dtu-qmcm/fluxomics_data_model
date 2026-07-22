@@ -1,0 +1,15 @@
+netflux (class=Double)
+A (R1) B = 100
+B (R2) D = 110
+D (R3) B = 50
+B (R4) R4 = 20
+R4 (R4) C = 20
+R4 (R4) E = 20
+B (R5) R5 = 20
+C (R5) R5 = 20
+R5 (R5) D = 20
+R5 (R5) E = 20
+R5 (R5) E = 20
+D (R6) F = 80
+E (E_out) E_ext = 60
+F (F_out) F_ext = 80

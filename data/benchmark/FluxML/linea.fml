@@ -1,0 +1,57 @@
+<fluxml xmlns="http://www.13cflux.net/fluxml">
+    <info>
+        <name>Linea</name>
+        <modeler>Stratmann</modeler>
+        <version>1.0</version>
+        <date>2020-07-24 20:33:00</date>
+        <comment>Academic straight line network model</comment>
+    </info>
+
+    <reactionnetwork>
+        <metabolitepools>
+            <pool id="S" atoms="1"/>
+            <pool id="A" atoms="1"/>
+            <pool id="B" atoms="1"/>
+        </metabolitepools>
+        <reaction id="v1" bidirectional="false">
+            <reduct id="S" cfg="a"/>
+            <rproduct id="A" cfg="a"/>
+        </reaction>
+        <reaction id="v2" bidirectional="true">
+            <reduct id="A" cfg="a"/>
+            <rproduct id="B" cfg="a"/>
+        </reaction>
+        <reaction id="v3" bidirectional="false">
+            <reduct id="B" cfg="a"/>
+        </reaction>
+    </reactionnetwork>
+
+    <configuration name="default" stationary="false">
+        <input pool="S">
+            <label cfg="0">0.1</label>
+            <label cfg="1">0.9</label>
+        </input>
+
+        <measurement>
+            <model>
+                <labelingmeasurement>
+                    <group id="MS_A" times="1.">
+                        <textual>A#M0,1</textual>
+                    </group>
+                    <group id="MS_B" times="1.">
+                        <textual>B#M0,1</textual>
+                    </group>
+                </labelingmeasurement>
+            </model>
+            <data>
+                <datum id="MS_A" stddev="1e-3" weight="0" time="1.">0.1</datum>
+                <datum id="MS_A" stddev="1e-3" weight="1" time="1.">0.9</datum>
+                <datum id="MS_B" stddev="1e-3" weight="0" time="1.">0.1</datum>
+                <datum id="MS_B" stddev="1e-3" weight="1" time="1.">0.9</datum>
+            </data>
+        </measurement>
+
+        <simulation method="cumomer">
+        </simulation>
+    </configuration>
+</fluxml>

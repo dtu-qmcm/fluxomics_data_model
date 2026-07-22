@@ -1,0 +1,138 @@
+# Glycolysis
+# ---------------------------------------------------------------------
+v1: G6P (abcdef) <-> F6P (abcdef)
+v2: F6P (abcdef) ->> FBP (abcdef)
+v3: FBP (abcdef) <-> DHAP (cba) + GAP (def)
+v4: DHAP (abc) <-> GAP (abc)
+v5: GAP (abc) <-> PG3 (abc)
+v6: PG3 (abc) <-> PEP (abc)
+v7: PEP (abc) ->> Pyr (abc)
+#
+# Pentose phosphate pathway
+# ---------------------------------------------------------------------
+v8: G6P (abcdef) ->> PG6 (abcdef)
+v9: PG6 (abcdef) ->> Ru5P (bcdef) + CO2 (a)
+v10: Ru5P (abcde) <-> X5P (abcde)
+v11: Ru5P (abcde) <-> R5P (abcde)
+v12: X5P (abcde) <-> GAP (cde) + EC2 (ab)
+v13: F6P (abcdef) <-> E4P (cdef) + EC2 (ab)
+v14: S7P (abcdefg) <-> R5P (cdefg) + EC2 (ab)
+v15: F6P (abcdef) <-> GAP (def) + EC3 (abc)
+v16: S7P (abcdefg) <-> E4P (defg) + EC3 (abc)
+#
+# Entner-Doudoroff pathway
+# ---------------------------------------------------------------------
+v17: PG6 (abcdef) ->> KDPG (abcdef)
+v18: KDPG (abcdef) ->> Pyr (abc) + GAP (def)
+#
+# Tricarboxylic acid cycle
+# ---------------------------------------------------------------------
+v19: Pyr (abc) ->> AcCoA (bc) + CO2 (a)
+v20: OAA (abcd) + AcCoA (ef) ->> Cit (dcbfea)
+v21: Cit (abcdef) <-> ICit (abcdef)
+v22: ICit (abcdef) <-> AKG (abcde) + CO2 (f)
+v23: AKG (abcde) ->> SucCoA (bcde) + CO2 (a)
+v24_a: SucCoA (abcd) <-> Suc (abcd)
+v24_b: SucCoA (abcd) <-> Suc (dcba)
+v25_a: Suc (abcd) <-> Fum (abcd)
+v25_b: Suc (abcd) <-> Fum (dbca)
+v26_a: Fum (abcd) <-> Mal (abcd)
+v26_b: Fum (abcd) <-> Mal (dcba)
+v27: Mal (abcd) <-> OAA (abcd)
+#
+# Amphibolic reactions
+# ---------------------------------------------------------------------
+v28: Mal (abcd) ->> Pyr (abc) + CO2 (d)
+v29: PEP (abc) + CO2 (d) <-> OAA (abcd)
+#
+# Acetic acid formation
+# ---------------------------------------------------------------------
+v30: AcCoA (ab) <-> Ac (ab)
+#
+# PDO biosynthesis
+# ---------------------------------------------------------------------
+v31: DHAP (abc) <-> Glyc3P (abc)
+v32: Glyc3P (abc) ->> Glyc (abc)
+v33: Glyc (abc) ->> HPA (abc)
+v34: HPA (abc) ->> PDO (abc)
+#
+# Amino acid biosynthesis
+# ---------------------------------------------------------------------
+v35: AKG (abcde) ->> Glu (abcde)
+v36: Glu (abcde) ->> Gln (abcde)
+v37: Glu (abcde) ->> Pro (abcde)
+v38_a: Glu (abcde) + CO2 (f) + Gln (ghijk) + Asp (lmno) + AcCoA (pq) ->> Arg (abcdef) + AKG (ghijk) + Fum (lmno) + Ac (pq)
+v38_b: Glu (abcde) + CO2 (f) + Gln (ghijk) + Asp (lmno) + AcCoA (pq) ->> Arg (abcdef) + AKG (ghijk) + Fum (onml) + Ac (pq)
+v39: OAA (abcd) + Glu (efghi) ->> Asp (abcd) + AKG (efghi)
+v40: Asp (abcd) ->> Asn (abcd)
+v41: Pyr (abc) + Glu (defgh) ->> Ala (abc) + AKG (defgh)
+v42: PG3 (abc) + Glu (defgh) ->> Ser (abc) + AKG (defgh)
+v43: Ser (abc) <-> Gly (ab) + MEETHF (c)
+v44: Gly (ab) <-> CO2 (a) + MEETHF (b)
+v45: Thr (abcd) ->> Gly (ab) + AcCoA (cd)
+v46: Ser (abc) + AcCoA (de) ->> Cys (abc) + Ac (de)
+v47: Asp (abcd) + Pyr (efg) + Glu (hijkl) + SucCoA (mnop) ->> LL_DAP (abcdgfe) + AKG (hijkl) + Suc (mnop)
+v48: LL_DAP (abcdefg) ->> Lys (abcdef) + CO2 (g)
+v49: Asp (abcd) ->> Thr (abcd)
+v50: Asp (abcd) + METHF (e) + Cys (fgh) + SucCoA (ijkl) ->> Met (abcde) + Pyr (fgh) + Suc (ijkl)
+v51: Pyr (abc) + Pyr (def) + Glu (ghijk) ->> Val (abcef) + CO2 (d) + AKG (ghijk)
+v52: AcCoA (ab) + Pyr (cde) + Pyr (fgh) + Glu (ijklm) ->> Leu (abdghe) + CO2 (c) + CO2 (f) + AKG (ijklm)
+v53: Thr (abcd) + Pyr (efg) + Glu (hijkl) ->> Ile (abfcdg) + CO2 (e) + AKG (hijkl)
+v54: PEP (abc) + PEP (def) + E4P (ghij) + Glu (klmno) ->> Phe (abcefghij) + CO2 (d) + AKG (klmno)
+v55: PEP (abc) + PEP (def) + E4P (ghij) + Glu (klmno) ->> Tyr (abcefghij) + CO2 (d) + AKG (klmno)
+v56: Ser (abc) + R5P (defgh) + PEP (ijk) + E4P (lmno) + PEP (pqr) + Gln (stuvw) ->> Trp (abcedklmnoj) + CO2 (i) + GAP (fgh) + Pyr (pqr) + Glu (stuvw)
+v57_a: R5P (abcde) + FTHF (f) + Gln (ghijk) + Asp (lmno) ->> His (edcbaf) + AKG (ghijk) + Fum (lmno)
+v57_b: R5P (abcde) + FTHF (f) + Gln (ghijk) + Asp (lmno) ->> His (edcbaf) + AKG (ghijk) + Fum (onml)
+#
+# One carbon metabolism
+# ---------------------------------------------------------------------
+v58: MEETHF (a) ->> METHF (a)
+v59: MEETHF (a) ->> FTHF (a)
+#
+# Transport
+# ---------------------------------------------------------------------
+v60: Gluc_pre (abcdef) ->> G6P (abcdef)
+v61: Gluc_ext (abcdef) ->> G6P (abcdef)
+v62: Cit_ext (abcdef) ->> Cit (abcdef)
+v63: Glyc_ext (abc)  ->> Glyc (abc)
+v63b: Glyc(abc) ->> Glyc_out(abc)
+v64: PDO (abc) ->> PDO_ext (abc)
+v65: Ac (ab) ->> Ac_ext (ab)
+v66: CO2 (a) ->> CO2_ext (a)
+#
+# Biomass formation
+# ---------------------------------------------------------------------
+bmALA: Ala (abc) ->> Aalbm (abc)
+bmArg: Arg (abcdef) ->> Argbm (abcdef)
+bmAsn: Asn (abcd) ->> Asnbm (abcd)
+bmAsp: Asp (abcd) ->> Aspbm (abcd)
+bmCys: Cys (abc) ->> Cysbm (abc)
+bmGlu: Glu (abcde) ->> Glubm (abcde)
+bmGln: Gln (abcde) ->> Glnbm (abcde)
+bmGly: Gly (ab) ->> Glybm (ab)
+bmHis: His (abcdef) ->> Hisbm (abcdef)
+bmIle: Ile (abcdef) ->> Ilebm (abcdef)
+bmLeu: Leu (abcdef) ->> Leubm (abcdef)
+bmLys: Lys (abcdef) ->> Lysbm (abcdef)
+bmMet: Met (abcde) ->> Metbm (abcde)
+bmPhe: Phe (abcdefghi) ->> Phebm (abcdefghi)
+bmPro: Pro (abcde) ->> Probm (abcde)
+bmSer: Ser (abc) ->> Serbm (abc)
+bmThr: Thr (abcd) ->> Thrbm (abcd)
+bmTrp: Trp (abcdefghijk) ->> Trpbm (abcdefghijk)
+bmTyr: Tyr (abcdefghi) ->> Tyrbm (abcdefghi)
+bmVal: Val (abcde) ->> Valbm (abcde)
+bmG6P: G6P (abcdef) ->> G6Pbm (abcdef)
+bmF6P: F6P (abcdef) ->> F6Pbm (abcdef)
+bmR5P: R5P (abcde) ->> R5Pbm (abcde)
+bmGAP: GAP (abc) ->> GAPbm (abc)
+bmPG3: PG3 (abc) ->> PG3bm (abc)
+bmPEP: PEP (abc) ->> PEPbm (abc)
+bmPyr: Pyr (abc) ->> Pyrbm (abc)
+bmAcCoA: AcCoA (ab) ->> AcCoAbm (ab)
+bmAKG: AKG (abcde) ->> AKGbm (abcde)
+bmOAA: OAA (abcd) ->> OAAbm (abcd)
+bmMEETHF: MEETHF (a) ->> MEETHFbm (a)
+#
+v67: BM -> BM_out
+#

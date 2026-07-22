@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mixture xmlns="http://www.13cflux.net/fluxml">
+    <input pool="Gluc_ext" type="isotopomer">
+        <label cfg="100000">1</label>
+    </input>
+    <input pool="Gluc_ext" type="isotopomer">
+        <label cfg="111111">1</label>
+    </input>
+</mixture>

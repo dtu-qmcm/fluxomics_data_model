@@ -1,0 +1,9 @@
+#reaction_ID	reactant_IDs(atom)	product_IDs(atom)	reversibility
+R1	A(abc)	B(abc)	0
+R2	B(abc)	D(abc)	0
+R3	D(abc)	B(abc)	0
+R4	B(abc)	C(bc)+E(a)	0
+R5	B(abc)+C(de)	D(bcd)+E(a)+E(e)	0
+R6	D(abc)	F(abc)	0
+E_out	E		0
+F_out	F		0

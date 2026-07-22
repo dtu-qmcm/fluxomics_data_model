@@ -1,0 +1,13 @@
+# Created by 'txt2ftbl --prefix simple_model'
+# Date: 2026-05-12 23:18:56 CEST +0200
+# influx_si version: 7.4.3
+# If edited by hand, remove these comments.
+Id	Comment	Kind	Formula	Operator	Value
+		NET	E_out	>=	0
+		NET	F_out	>=	0
+		NET	R1	>=	0
+		NET	R2	>=	0
+		NET	R3	>=	0
+		NET	R4	>=	0
+		NET	R5	>=	0
+		NET	R6	>=	0
