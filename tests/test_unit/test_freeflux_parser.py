@@ -231,9 +231,9 @@ class TestFreefluxParserMDVParsing:
         # Check values are in valid range [0, 1] for MDVs
         for datum in mdv_data:
             if datum.value is not None:
-                assert 0 <= datum.value <= 1, (
-                    f"MDV value {datum.value} out of range"
-                )
+                assert (
+                    0 <= datum.value <= 1
+                ), f"MDV value {datum.value} out of range"
 
     def test_mdv_stddev_parsed(self):
         """Test that MDV standard deviations are parsed."""
@@ -284,6 +284,7 @@ class TestFreefluxFormatConsistency:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_tsv(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n")
 
@@ -302,6 +303,7 @@ def _minimal_reactions_tsv(directory: Path) -> None:
 # ---------------------------------------------------------------------------
 # _parse_compounds — space-separated format (the bug we fixed)
 # ---------------------------------------------------------------------------
+
 
 class TestParseCompounds:
     """Unit-tests for _parse_compounds; exercises the \\s* regex fix."""
@@ -349,6 +351,7 @@ class TestParseCompounds:
 # ---------------------------------------------------------------------------
 # _find_file — list patterns and alias resolution
 # ---------------------------------------------------------------------------
+
 
 class TestFindFile:
     """Unit-tests for _find_file; exercises list-of-stems behaviour."""
@@ -406,6 +409,7 @@ class TestFindFile:
 # ---------------------------------------------------------------------------
 # _parse_label_input — new function
 # ---------------------------------------------------------------------------
+
 
 class TestParseLabelInput:
     """Tests for the new _parse_label_input method."""
@@ -524,6 +528,7 @@ class TestParseLabelInput:
 # Integration: label_input wired into parse()
 # ---------------------------------------------------------------------------
 
+
 class TestLabelInputIntegration:
     """Verify that label_input feeds through parse() into LabelingExperiments."""
 
@@ -586,6 +591,7 @@ class TestLabelInputIntegration:
 # _parse_flux_bounds — new function
 # ---------------------------------------------------------------------------
 
+
 class TestParseFluxBounds:
     """Tests for _parse_flux_bounds / constraints file parsing."""
 
@@ -593,9 +599,14 @@ class TestParseFluxBounds:
         self.parser = FreefluxParser()
         # Pre-populate reactions so 'all' expansion works
         from fluxomics_data_converter.model.reaction import Reaction
+
         self.parser._reactions = {
-            "R1": Reaction(id="R1", reactants=["A"], products=["B"], reversibility=False),
-            "R2": Reaction(id="R2", reactants=["B"], products=["C"], reversibility=False),
+            "R1": Reaction(
+                id="R1", reactants=["A"], products=["B"], reversibility=False
+            ),
+            "R2": Reaction(
+                id="R2", reactants=["B"], products=["C"], reversibility=False
+            ),
         }
 
     def test_returns_none_when_no_file(self, tmp_path):
@@ -684,6 +695,7 @@ class TestParseFluxBounds:
 # ---------------------------------------------------------------------------
 # Integration: flux_bounds wired into parse() → FluxomicsData.constraints
 # ---------------------------------------------------------------------------
+
 
 class TestFluxBoundsIntegration:
     """Verify that flux_bounds feeds through parse() into FluxomicsData.constraints."""

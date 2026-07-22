@@ -215,7 +215,7 @@ class LabelingExperiments(BaseModel):
 
     A specific set of tracers, local constraints,
     measurement data, and simulation variables.  The ``name`` attribute must
-    be unique within a :class:`FluxomicsData`; 
+    be unique within a :class:`FluxomicsData`;
 
     """
 
@@ -340,12 +340,11 @@ class FluxomicsData(BaseModel):
             all_produced.update(rxn.products)
             all_consumed.update(rxn.reactants)
         input_pools = frozenset(
-            t.metabolite
-            for exp in self.experiments
-            for t in exp.tracers
+            t.metabolite for exp in self.experiments for t in exp.tracers
         )
         drain_ids = frozenset(
-            f"{m}_out" for m in (all_produced - all_consumed - input_pools)
+            f"{m}_out"
+            for m in (all_produced - all_consumed - input_pools)
             if not m.endswith("_ext")
         )
         valid_reaction_ids = computational_reaction_ids | drain_ids

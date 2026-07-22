@@ -6,12 +6,15 @@ flux analysis.
 
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from typing import Optional, Dict
+from typing import TYPE_CHECKING, Optional, Dict
 from datetime import datetime
 from pathlib import Path
 
 from ..core.core import FluxomicsData, LabelingExperiments
 from ..model.atom_mapping import AtomTransition
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class FluxMLWriter:
@@ -172,7 +175,9 @@ class FluxMLWriter:
 
         if self._model.metadata.date:
             date_elem = ET.SubElement(metadata, "date")
-            date_elem.text = self._model.metadata.date.strftime("%Y-%m-%d %H:%M:%S")
+            date_elem.text = self._model.metadata.date.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
         else:
             # Add current timestamp
             date_elem = ET.SubElement(metadata, "date")
@@ -238,7 +243,9 @@ class FluxMLWriter:
             for tracer in exp.tracers
         }
         for metab_id in sorted(
-            m for m in (produced - consumed - input_pools) if not m.endswith("_ext")
+            m
+            for m in (produced - consumed - input_pools)
+            if not m.endswith("_ext")
         ):
             drain = ET.SubElement(rn, "reaction")
             drain.set("id", f"{metab_id}_out")
@@ -248,7 +255,11 @@ class FluxMLWriter:
             atom_count = self._metabolite_atom_counts.get(metab_id)
             if not atom_count:
                 m = next(
-                    (m for m in self._model.model.metabolites if m.id == metab_id),
+                    (
+                        m
+                        for m in self._model.model.metabolites
+                        if m.id == metab_id
+                    ),
                     None,
                 )
                 if m:
@@ -262,7 +273,10 @@ class FluxMLWriter:
         rxn = ET.SubElement(rn, "reaction")
 
         # Handle variant reactions
-        if reaction.atom_transition_ids and len(reaction.atom_transition_ids) > 1:
+        if (
+            reaction.atom_transition_ids
+            and len(reaction.atom_transition_ids) > 1
+        ):
             # Multiple variants - use space-separated IDs
             rxn.set("id", " ".join(reaction.atom_transition_ids))
         else:
@@ -561,12 +575,12 @@ class FluxMLWriter:
             consumed.update(rxn.reactants)
             produced.update(rxn.products)
         input_pools = {
-            t.metabolite
-            for exp in self._model.experiments
-            for t in exp.tracers
+            t.metabolite for exp in self._model.experiments for t in exp.tracers
         }
         sink_mets = sorted(
-            m for m in (produced - consumed - input_pools) if not m.endswith("_ext")
+            m
+            for m in (produced - consumed - input_pools)
+            if not m.endswith("_ext")
         )
         new_drain_ids = [f"{m}_out" for m in sink_mets]
 
@@ -593,7 +607,8 @@ class FluxMLWriter:
                     S[met_idx[mid], n_rxn + k] -= 1.0
 
             int_rows = [
-                i for i, m in enumerate(metabolites)
+                i
+                for i, m in enumerate(metabolites)
                 if m.id not in input_pools and not m.id.endswith("_ext")
             ]
             S_int = S[int_rows, :]
@@ -614,7 +629,9 @@ class FluxMLWriter:
                     v_d, *_ = np.linalg.lstsq(
                         S_int[:, d_cols], -S_int[:, f_cols] @ v_f, rcond=None
                     )
-                    derived = {d_names[i]: float(v_d[i]) for i in range(len(d_cols))}
+                    derived = {
+                        d_names[i]: float(v_d[i]) for i in range(len(d_cols))
+                    }
                 except Exception:
                     derived = {n: 0.0 for n in d_names}
 
@@ -745,6 +762,7 @@ class FluxMLWriter:
         datums = list(data_elem)
         # Group datums: {group_id: [(weight_int, elem), ...]}
         from collections import defaultdict
+
         groups: dict = defaultdict(list)
         non_weight: list = []
         for elem in datums:
@@ -763,7 +781,9 @@ class FluxMLWriter:
             n_C = len(weights) - 1
             M = self._na_correction_matrix(n_C)
             vals = np.array([float(e.text or "0") for _, e in pairs_sorted])
-            sds = np.array([float(e.get("stddev", "0")) for _, e in pairs_sorted])
+            sds = np.array(
+                [float(e.get("stddev", "0")) for _, e in pairs_sorted]
+            )
             new_vals = M @ vals
             new_sds = np.sqrt((M**2) @ (sds**2))
             for i, (_, elem) in enumerate(pairs_sorted):

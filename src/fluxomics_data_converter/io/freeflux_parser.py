@@ -87,8 +87,18 @@ class FreefluxParser:
         "fluxes": ["fluxes", "flux"],
         "concentrations": ["concentrations", "concentration"],
         "label_input": ["label_input", "label_inputs"],
-        "flux_bounds": ["flux_bounds", "flux_bound", "constraints", "constraint"],
-        "measured_MDVs": ["measured_MDVs", "measured_MDV", "measured_MID", "measured_MIDs"],
+        "flux_bounds": [
+            "flux_bounds",
+            "flux_bound",
+            "constraints",
+            "constraint",
+        ],
+        "measured_MDVs": [
+            "measured_MDVs",
+            "measured_MDV",
+            "measured_MID",
+            "measured_MIDs",
+        ],
         "measured_fluxes": ["measured_fluxes", "measured_flux"],
         "measured_inst_MDVs": [
             "measured_inst_MDVs",
@@ -499,9 +509,7 @@ class FreefluxParser:
             return flux_id.split("___")[0]
         return flux_id
 
-    def _parse_flux_bounds(
-        self, base_path: Path
-    ) -> Optional[Constraints]:
+    def _parse_flux_bounds(self, base_path: Path) -> Optional[Constraints]:
         """Parse flux_bounds / constraints file.
 
         Mirrors the Freeflux ``set_flux_bounds(fluxid, bounds=[lo, hi])`` API.
@@ -544,19 +552,12 @@ class FreefluxParser:
             lo = None if pd.isna(lo_raw) else float(lo_raw)
             hi = None if pd.isna(hi_raw) else float(hi_raw)
 
-            # Expand 'all' to every reaction in the network, including
-            # auto-generated drain reactions for sink metabolites.
+            # Expand 'all' to every reaction defined in the network. Only the
+            # reactions the user actually declared receive these bounds;
+            # auto-generated drain reactions for sink metabolites are synthetic
+            # and are left unbounded.
             if rxn_id.lower() == "all":
-                all_produced: set = set()
-                all_consumed: set = set()
-                for rxn in self._reactions.values():
-                    all_produced.update(rxn.products)
-                    all_consumed.update(rxn.reactants)
-                sink_mets = sorted(
-                    m for m in (all_produced - all_consumed) if not m.endswith("_ext")
-                )
-                drain_ids = [f"{m}_out" for m in sink_mets]
-                targets = list(self._reactions.keys()) + drain_ids
+                targets = list(self._reactions.keys())
             else:
                 targets = [rxn_id]
 
@@ -609,16 +610,22 @@ class FreefluxParser:
             elif "atom" in col_lower:
                 col_map["label_atom"] = col
 
-        labels_by_metabolite: Dict[str, List[LabelComposition]] = defaultdict(list)
+        labels_by_metabolite: Dict[str, List[LabelComposition]] = defaultdict(
+            list
+        )
 
         for _, row in df.iterrows():
-            metab_id = str(row.get(col_map.get("metabolite_id", ""), "")).strip()
+            metab_id = str(
+                row.get(col_map.get("metabolite_id", ""), "")
+            ).strip()
             if not metab_id or pd.isna(metab_id) or metab_id == "nan":
                 continue
 
-            pattern_str = str(
-                row.get(col_map.get("labeling_pattern", ""), "")
-            ).strip().strip("'\"")
+            pattern_str = (
+                str(row.get(col_map.get("labeling_pattern", ""), ""))
+                .strip()
+                .strip("'\"")
+            )
             pct_str = str(row.get(col_map.get("percentage", ""), "1.0")).strip()
             purity_str = str(row.get(col_map.get("purity", ""), "1.0")).strip()
 
@@ -627,8 +634,12 @@ class FreefluxParser:
 
             # Support comma-separated lists of patterns in a single cell
             patterns = [p.strip().strip("'\"") for p in pattern_str.split(",")]
-            percentages = self._parse_comma_values(pct_str) or [1.0] * len(patterns)
-            purities = self._parse_comma_values(purity_str) or [1.0] * len(patterns)
+            percentages = self._parse_comma_values(pct_str) or [1.0] * len(
+                patterns
+            )
+            purities = self._parse_comma_values(purity_str) or [1.0] * len(
+                patterns
+            )
 
             # Pad if lengths don't match
             while len(percentages) < len(patterns):

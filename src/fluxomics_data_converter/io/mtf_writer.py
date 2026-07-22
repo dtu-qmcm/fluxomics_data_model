@@ -189,14 +189,22 @@ class MTFWriter:
         # drain reactions (e.g. E_ext from "E_out: E ->> E_ext") and must not
         # get an additional drain reaction of their own.
         sink_metabolites = sorted(
-            m for m in (produced - consumed - input_pools) if not m.endswith("_ext")
+            m
+            for m in (produced - consumed - input_pools)
+            if not m.endswith("_ext")
         )
         if sink_metabolites:
-            lines.append("# Drain reactions (auto-generated for sink metabolites)")
+            lines.append(
+                "# Drain reactions (auto-generated for sink metabolites)"
+            )
             lines.append("# " + "-" * 60)
             for metab_id in sink_metabolites:
                 metab = next(
-                    (m for m in self._model.model.metabolites if m.id == metab_id),
+                    (
+                        m
+                        for m in self._model.model.metabolites
+                        if m.id == metab_id
+                    ),
                     None,
                 )
                 atom_count = (
@@ -249,7 +257,11 @@ class MTFWriter:
             if rxn_id.endswith("_out") and reaction.reactants:
                 metab_id = reaction.reactants[0]
                 metab = next(
-                    (m for m in self._model.model.metabolites if m.id == metab_id),
+                    (
+                        m
+                        for m in self._model.model.metabolites
+                        if m.id == metab_id
+                    ),
                     None,
                 )
                 atom_count = (
@@ -258,10 +270,10 @@ class MTFWriter:
                     or 0
                 )
                 if atom_count:
-                    atoms = "".join(chr(ord("a") + i) for i in range(min(atom_count, 26)))
-                    return (
-                        f"{rxn_id}: {metab_id} ({atoms}) {arrow} {metab_id}_ext ({atoms})"
+                    atoms = "".join(
+                        chr(ord("a") + i) for i in range(min(atom_count, 26))
                     )
+                    return f"{rxn_id}: {metab_id} ({atoms}) {arrow} {metab_id}_ext ({atoms})"
             return f"{rxn_id}: {reactants_str} {arrow}"
 
         return f"{rxn_id}: {reactants_str} {arrow} {products_str}"
@@ -484,7 +496,9 @@ class MTFWriter:
                 except (KeyError, IndexError):
                     atom_count = None
                 if atom_count:
-                    fragment = ",".join(str(i) for i in range(1, atom_count + 1))
+                    fragment = ",".join(
+                        str(i) for i in range(1, atom_count + 1)
+                    )
                 else:
                     fragment = ""
 
@@ -642,12 +656,11 @@ class MTFWriter:
             all_consumed.update(rxn.reactants)
             all_produced.update(rxn.products)
         input_pools = {
-            t.metabolite
-            for exp in self._model.experiments
-            for t in exp.tracers
+            t.metabolite for exp in self._model.experiments for t in exp.tracers
         }
         sink_mets = sorted(
-            m for m in (all_produced - all_consumed - input_pools)
+            m
+            for m in (all_produced - all_consumed - input_pools)
             if not m.endswith("_ext")
         )
         drain_ids = [f"{m}_out" for m in sink_mets]
@@ -690,7 +703,10 @@ class MTFWriter:
         d_cols = [i for i, n in enumerate(all_rxn_names) if n in dependent]
         rank_needed = int(np.linalg.matrix_rank(S_int)) if n_int > 0 else 0
 
-        if len(d_cols) == 0 or int(np.linalg.matrix_rank(S_int[:, d_cols])) < rank_needed:
+        if (
+            len(d_cols) == 0
+            or int(np.linalg.matrix_rank(S_int[:, d_cols])) < rank_needed
+        ):
             # Fallback: QR on uncovered rows to supplement D
             covered: set = set()
             for row_i in range(n_int):
@@ -703,7 +719,7 @@ class MTFWriter:
                 try:
                     _, _, perm = qr(S_uncov, pivoting=True)
                     r_uncov = int(np.linalg.matrix_rank(S_uncov))
-                    for p in perm[:min(r_uncov, len(uncovered))]:
+                    for p in perm[: min(r_uncov, len(uncovered))]:
                         dependent.add(all_rxn_names[non_d_cols[p]])
                 except Exception:
                     pass
@@ -731,12 +747,11 @@ class MTFWriter:
         met_idx = {m.id: i for i, m in enumerate(metabolites)}
 
         input_pools = {
-            t.metabolite
-            for exp in self._model.experiments
-            for t in exp.tracers
+            t.metabolite for exp in self._model.experiments for t in exp.tracers
         }
         sink_mets = sorted(
-            m for m in (
+            m
+            for m in (
                 {m for rxn in reactions for m in rxn.products}
                 - {m for rxn in reactions for m in rxn.reactants}
                 - input_pools
@@ -759,12 +774,16 @@ class MTFWriter:
             if met_id in met_idx:
                 S[met_idx[met_id], n_rxn + k] -= 1.0
 
-        int_rows = [i for i, m in enumerate(metabolites) if m.id not in input_pools]
+        int_rows = [
+            i for i, m in enumerate(metabolites) if m.id not in input_pools
+        ]
         S_int = S[int_rows, :]
 
         stored = {fv.flux: (fv.value or 0.0) for fv in flux_values}
         d_cols = [i for i, n in enumerate(all_rxn_names) if n in dependent_ids]
-        f_cols = [i for i, n in enumerate(all_rxn_names) if n not in dependent_ids]
+        f_cols = [
+            i for i, n in enumerate(all_rxn_names) if n not in dependent_ids
+        ]
         d_names = [all_rxn_names[i] for i in d_cols]
         f_names = [all_rxn_names[i] for i in f_cols]
 
@@ -776,8 +795,12 @@ class MTFWriter:
             and self._experiment.measurement.model.flux_measurement
             and self._experiment.measurement.data
         ):
-            data_map = {d.id: d.value for d in self._experiment.measurement.data.data}
-            for nf in self._experiment.measurement.model.flux_measurement.net_fluxes:
+            data_map = {
+                d.id: d.value for d in self._experiment.measurement.data.data
+            }
+            for (
+                nf
+            ) in self._experiment.measurement.model.flux_measurement.net_fluxes:
                 v = data_map.get(nf.id)
                 if v is not None:
                     measured[nf.id] = float(v)
@@ -836,7 +859,8 @@ class MTFWriter:
                     for t in exp.tracers
                 }
                 sink_ids_ = sorted(
-                    m for m in (all_produced_ - all_consumed_ - input_pools_)
+                    m
+                    for m in (all_produced_ - all_consumed_ - input_pools_)
                     if not m.endswith("_ext")
                 )
                 drain_ids_ = [f"{m}_out" for m in sink_ids_]

@@ -213,7 +213,11 @@ class MTFParser:
         # Match reaction format: id:\tsubstrates -> products
         # Order matters: match longer patterns first (<->>, ->>)
         # before shorter (<->, ->)
-        match = re.match(r"^(\S+):\s*(.+?)\s*(<->>|<->|->>|->)\s*(.+)$", line)
+        # The product side uses ``.*`` (not ``.+``) so drain/output reactions
+        # written with an empty product side (e.g. ``R64: PDO <->``) still
+        # parse; otherwise they are dropped and any flux variable that
+        # references them fails validation on round-trip.
+        match = re.match(r"^(\S+):\s*(.+?)\s*(<->>|<->|->>|->)\s*(.*)$", line)
         if not match:
             return None
 

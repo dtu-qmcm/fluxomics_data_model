@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "jax>=0.4.23",
     "jaxlib>=0.4.23",
+    "openpyxl>=3.1.5",
     "pandas>=2.2.3",
     "pydantic>=2.10.4",
     "sbmlmath>=0.4.0",

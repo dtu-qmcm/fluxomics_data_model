@@ -100,7 +100,8 @@ class Reaction(BaseModel):
     def is_variant_reaction(self) -> bool:
         """Check if this reaction has multiple atom map variants."""
         return (
-            self.atom_transition_ids is not None and len(self.atom_transition_ids) > 1
+            self.atom_transition_ids is not None
+            and len(self.atom_transition_ids) > 1
         )
 
     @property
