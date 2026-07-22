@@ -1,0 +1,4 @@
+"experiment_id","met_id","tracer_id",atom_ids,"ratio","atom_mdv",enrichment
+"exp1","A","[2-13C]A",[2],"1.0","[0,1]",1
+"exp2","A","[1,2-13C]A","[1,2]","0.5","[0.05,0.95]",1
+"exp2","A","[4-13C]A","[4]","0.9","[0.1,0.9]",0.98
