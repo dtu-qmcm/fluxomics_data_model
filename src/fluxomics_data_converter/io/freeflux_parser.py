@@ -5,7 +5,8 @@ tabular input files. This parser supports the following file types:
     - reactions: Network definition with atom transitions
     - fluxes: Flux values (simulation/reference)
     - concentrations: Metabolite pool sizes
-    - label_input: Tracer labeling strategy (substrate + pattern + fraction + purity)
+    - label_input: Tracer labeling strategy (substrate + pattern + fraction
+      + purity)
     - flux_bounds / constraints: Per-reaction or global flux bounds [lo, hi]
     - measured_MDVs: Steady-state mass distribution vector measurements
     - measured_fluxes: Measured flux values with uncertainties
@@ -56,7 +57,8 @@ class FreefluxParser:
     Freeflux uses a set of tabular files stored in a directory.  All files
     in the set are optional except ``reactions.*``::
 
-        reactions.*          — network definition with atom transitions (required)
+        reactions.*          — network definition with atom transitions
+                               (required)
         fluxes.*             — flux values (simulation / reference)
         concentrations.*     — metabolite pool sizes
         measured_MDVs.*      — steady-state mass distribution vectors
@@ -69,7 +71,8 @@ class FreefluxParser:
 
         parser = FreefluxParser()
         model = parser.parse("data/ecoli/")         # directory
-        model = parser.parse("data/ecoli/reactions.tsv")  # or the reactions file
+        model = parser.parse("data/ecoli/reactions.tsv")
+        # or the reactions file
 
     atom transition notation
     ---------------------
@@ -125,6 +128,10 @@ class FreefluxParser:
 
         Returns:
             FluxomicsData containing the parsed data
+
+        Raises:
+            FileNotFoundError: If the reactions file is not found in the
+                given directory.
         """
         base_path = Path(base_path)
 
@@ -197,7 +204,11 @@ class FreefluxParser:
         )
 
     def _find_file(self, base_path: Path, file_type: str) -> Optional[Path]:
-        """Find a file matching the pattern with any supported extension."""
+        """Find a file matching the pattern with any supported extension.
+
+        Returns:
+            Path to the first matching file, or None if not found.
+        """
         patterns = self.FILE_PATTERNS[file_type]
         if isinstance(patterns, str):
             patterns = [patterns]
@@ -209,7 +220,11 @@ class FreefluxParser:
         return None
 
     def _read_tabular(self, file_path: Path) -> pd.DataFrame:
-        """Read tabular file (tsv/csv/xlsx) into DataFrame."""
+        """Read tabular file (tsv/csv/xlsx) into DataFrame.
+
+        Returns:
+            DataFrame with cleaned column names (leading # removed).
+        """
         suffix = file_path.suffix.lower()
 
         if suffix == ".xlsx":
@@ -228,7 +243,7 @@ class FreefluxParser:
         return df
 
     def _parse_reactions(self, filepath: Path) -> None:
-        """Parse reactions file containing reaction network with atom transitions.
+        """Parse reactions file with reaction network and atom transitions.
 
         Format:
         - #reaction_ID: Reaction identifier (section headers start with #)
@@ -388,6 +403,10 @@ class FreefluxParser:
         """Create AtomTransition from letter notation.
 
         Handles symmetric compounds with comma-separated atom variants.
+
+        Returns:
+            AtomTransition object, or None if no valid mappings could be
+            created.
         """
         # Check for symmetric compounds (comma-separated atom strings)
         has_variants = any(
@@ -420,7 +439,12 @@ class FreefluxParser:
         reactant_atoms: List[Tuple[str, str]],
         product_atoms: List[Tuple[str, str]],
     ) -> AtomTransition:
-        """Create atom transition with variants for symmetric compounds."""
+        """Create atom transition with variants for symmetric compounds.
+
+        Returns:
+            AtomTransition with all variant combinations and uniform
+            weights, or None if no valid mappings could be created.
+        """
         from itertools import product as cartesian_product
 
         # Extract variants for each compound
@@ -504,6 +528,9 @@ class FreefluxParser:
         For variant reactions, the base ID (e.g., 'R24') is kept as-is
         since the data model stores flux values against base reaction IDs.
         Strips any computational suffixes (e.g., '___1') if present.
+
+        Returns:
+            The base reaction ID with any computational suffix removed.
         """
         if "___" in flux_id:
             return flux_id.split("___")[0]
@@ -522,6 +549,10 @@ class FreefluxParser:
 
         Each row produces up to two ``ConstraintFormula`` entries in
         ``NetConstraints``:  ``reaction_id >= lo`` and ``reaction_id <= hi``.
+
+        Returns:
+            Constraints object with flux bound formulas, or None if no
+            flux_bounds file found or no formulas parsed.
         """
         filepath = self._find_file(base_path, "flux_bounds")
         if not filepath:
@@ -589,6 +620,10 @@ class FreefluxParser:
 
         Multiple rows for the same metabolite are merged into one Tracers
         entry (each row becomes one LabelComposition).
+
+        Returns:
+            List of Tracers objects, one per labeled metabolite. Empty
+            list if no label_input file found.
         """
         filepath = self._find_file(base_path, "label_input")
         if not filepath:
@@ -673,6 +708,10 @@ class FreefluxParser:
         13CFlux2 net/xch convention:
             net = forward - backward
             xch = min(forward, backward)
+
+        Returns:
+            List of FluxValue objects, or None if no fluxes file found
+            or no flux values parsed.
         """
         filepath = self._find_file(base_path, "fluxes")
         if not filepath:
@@ -742,6 +781,10 @@ class FreefluxParser:
         Format:
         - #metabolite_ID or #metab_ID: Metabolite identifier
         - value or value (umol/gCDW): Concentration value
+
+        Returns:
+            List of MetaboliteSizeValue objects, or None if no
+            concentrations file found or no values parsed.
         """
         filepath = self._find_file(base_path, "concentrations")
         if not filepath:
@@ -777,7 +820,14 @@ class FreefluxParser:
         return metabolitesize_values if metabolitesize_values else None
 
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
-        """Parse measurement files (measured_MDVs, measured_fluxes, measured_inst_MDVs)."""
+        """Parse measurement files.
+
+        Parses measured_MDVs, measured_fluxes, and measured_inst_MDVs.
+
+        Returns:
+            Measurement object containing labeling and flux measurements,
+            or None if no measurement files found.
+        """
         # Parse steady-state MDV measurements
         labeling_measurement, labeling_data = self._parse_measured_mdvs(
             base_path
@@ -832,6 +882,10 @@ class FreefluxParser:
           (metabolite_positions)
         - mean: Comma-separated MDV values
         - sd: Comma-separated standard deviations
+
+        Returns:
+            Tuple of (LabelingMeasurement, list of Datum) or (None, None)
+            if file not found or no groups parsed.
         """
         filepath = self._find_file(base_path, "measured_MDVs")
         if not filepath:
@@ -914,13 +968,17 @@ class FreefluxParser:
     def _parse_measured_inst_mdvs(
         self, base_path: Path
     ) -> Tuple[Optional[LabelingMeasurement], Optional[List[Datum]]]:
-        """Parse measured_inst_MDVs file containing time-course MDV measurements.
+        """Parse measured_inst_MDVs file with time-course MDV measurements.
 
         Format:
         - #fragment_ID: Fragment identifier
         - time or time (s): Time point
         - mean: Comma-separated MDV values
         - sd: Comma-separated standard deviations
+
+        Returns:
+            Tuple of (LabelingMeasurement, list of Datum) or (None, None)
+            if file not found or no groups parsed.
         """
         filepath = self._find_file(base_path, "measured_inst_MDVs")
         if not filepath:
@@ -1030,6 +1088,10 @@ class FreefluxParser:
         - #reaction_ID: Reaction identifier
         - mean: Mean flux value
         - sd: Standard deviation
+
+        Returns:
+            Tuple of (FluxMeasurement, list of Datum) or (None, None) if
+            file not found or no flux measurements parsed.
         """
         filepath = self._find_file(base_path, "measured_fluxes")
         if not filepath:
@@ -1084,7 +1146,12 @@ class FreefluxParser:
         return (FluxMeasurement(net_fluxes=net_fluxes), data)
 
     def _parse_comma_values(self, value_str: str) -> List[float]:
-        """Parse comma-separated values into list of floats."""
+        """Parse comma-separated values into list of floats.
+
+        Returns:
+            List of float values parsed from the comma-separated string.
+            Invalid values are replaced with 0.0.
+        """
         if not value_str or value_str == "nan":
             return []
 

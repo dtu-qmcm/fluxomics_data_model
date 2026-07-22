@@ -185,7 +185,15 @@ class Metabolite(BaseModel):
     @field_validator("formula")
     @classmethod
     def validate_formula(cls, v: Optional[str]) -> Optional[str]:
-        """Validate chemical formula string."""
+        """Validate chemical formula string.
+
+        Returns:
+            The validated formula string, or the input unchanged for
+            empty/zero values.
+
+        Raises:
+            ValueError: If the formula string has an invalid format.
+        """
         if not v or v == "0" or v == "":
             return v
         pattern = r"^(([A-Z][a-z]?)([0-9.]+[0-9.]?|(?=[A-Z])?))+$"
@@ -195,7 +203,11 @@ class Metabolite(BaseModel):
 
     @staticmethod
     def _parse_formula(formula: str) -> dict[str, float]:
-        """Parse chemical formula into element counts."""
+        """Parse chemical formula into element counts.
+
+        Returns:
+            A dictionary mapping element symbols to their total counts.
+        """
         if not formula or formula in ["0", ""]:
             return {}
 
@@ -244,7 +256,11 @@ class Metabolite(BaseModel):
         return self.jax_atoms.to_jax_array()
 
     def with_jax_atoms(self, atoms: jnp.ndarray) -> "Metabolite":
-        """Create new metabolite with JAX atom array."""
+        """Create new metabolite with JAX atom array.
+
+        Returns:
+            A new ``Metabolite`` with the given JAX atom array attached.
+        """
         return Metabolite(
             id=self.id,
             name=self.name,

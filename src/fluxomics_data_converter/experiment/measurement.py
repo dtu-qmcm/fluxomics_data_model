@@ -5,7 +5,8 @@ This module mirrors the ``<measurement>`` element of a FluxML
 FluxML keeps deliberately separate:
 
 **Measurement** (what was measured and how)
-    - :class:`Group`               — one labelling measurement group (MS fragment)
+    - :class:`Group`               — one labelling measurement group
+      (MS fragment)
     - :class:`NetFlux`             — a net flux measurement specification
     - :class:`ExchangeFlux`        — an exchange flux measurement specification
     - :class:`MetaboliteSize`      — a pool-size measurement specification
@@ -144,7 +145,14 @@ class LabelingMeasurement(BaseModel):
     @field_validator("groups")
     @classmethod
     def validate_unique_ids(cls, v: List[Group]) -> List[Group]:
-        """Validate group IDs are unique."""
+        """Validate group IDs are unique.
+
+        Returns:
+            The validated list of groups.
+
+        Raises:
+            ValueError: If group IDs are not unique.
+        """
         ids = [group.id for group in v]
         if len(set(ids)) != len(ids):
             raise ValueError("Group IDs must be unique")
@@ -286,11 +294,20 @@ class MeasurementData(BaseModel):
         return self.times_array.to_jax_array()
 
     def get_data_for_id(self, datum_id: str) -> List[Datum]:
-        """Get all data points for a specific ID."""
+        """Get all data points for a specific ID.
+
+        Returns:
+            A list of ``Datum`` objects matching the given ID.
+        """
         return [datum for datum in self.data if datum.id == datum_id]
 
     def to_time_series(self, datum_id: str) -> Optional[TimeSeries]:
-        """Convert data for specific ID to time series."""
+        """Convert data for specific ID to time series.
+
+        Returns:
+            A ``TimeSeries`` of the data points for the ID, or ``None``
+            if no data points exist or none carry time information.
+        """
         data_points = self.get_data_for_id(datum_id)
         if not data_points:
             return None
@@ -321,7 +338,12 @@ class Measurement(BaseModel):
         extra = "forbid"
 
     def get_labeling_data(self) -> Optional[Dict[str, TimeSeries]]:
-        """Get labeling measurement data as time series."""
+        """Get labeling measurement data as time series.
+
+        Returns:
+            A dictionary mapping group IDs to ``TimeSeries``, or ``None``
+            if there are no labeling measurements or no data.
+        """
         if not self.model.labeling_measurement:
             return None
 

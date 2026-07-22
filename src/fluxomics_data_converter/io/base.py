@@ -12,7 +12,8 @@ Adding a new format
    matches :meth:`FluxomicsParser.parse`.
 2. Create ``<format>_writer.py`` with a class whose ``write`` method
    matches :meth:`FluxomicsWriter.write`.
-3. Register the file-extension mapping in :func:`fluxomics_data_converter.io.parse`.
+3. Register the file-extension mapping in
+   :func:`fluxomics_data_converter.io.parse`.
 4. Export the new class and convenience function from ``io/__init__.py``.
 """
 
@@ -28,13 +29,14 @@ from ..core.core import FluxomicsData
 class FluxomicsParser(Protocol):
     """Protocol satisfied by every format-specific parser.
 
-    A parser converts one file (or a directory/base-path containing several
-    related files) into a validated :class:`~fluxomics_data_converter.FluxomicsData`.
+    A parser converts one file (or a directory/base-path containing
+    several related files) into a validated
+    :class:`~fluxomics_data_converter.FluxomicsData`.
 
     Implementors
     ------------
-    - :class:`~fluxomics_data_converter.io.FluxMLParser`  (``parse_file`` alias kept for
-      backward compatibility)
+    - :class:`~fluxomics_data_converter.io.FluxMLParser`
+      (``parse_file`` alias kept for backward compatibility)
     - :class:`~fluxomics_data_converter.io.MTFParser`
     - :class:`~fluxomics_data_converter.io.FreefluxParser`
     """

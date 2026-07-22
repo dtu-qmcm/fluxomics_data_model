@@ -250,7 +250,8 @@ class TestFreefluxParserMDVParsing:
 
 
 class TestFreefluxFormatConsistency:
-    """Tests to ensure Freeflux format produces consistent results with other formats."""
+    """Tests to ensure Freeflux format produces consistent results with
+    other formats."""
 
     def test_reaction_has_required_fields(self):
         """Test that reactions have all required fields."""
@@ -451,7 +452,8 @@ class TestParseLabelInput:
         assert tracers[0].labels[0].labeled_pattern == "010"
 
     def test_comma_separated_patterns_in_one_row(self, tmp_path):
-        """Multiple patterns in a single cell become multiple LabelCompositions."""
+        """Multiple patterns in a single cell become multiple
+        LabelCompositions."""
         _write_tsv(
             tmp_path / "label_input.tsv",
             [
@@ -468,7 +470,8 @@ class TestParseLabelInput:
         assert tracers[0].labels[1].fraction == pytest.approx(0.25)
 
     def test_multiple_rows_same_metabolite_merged(self, tmp_path):
-        """Two rows for the same metabolite are merged into one Tracers entry."""
+        """Two rows for the same metabolite are merged into one Tracers
+        entry."""
         _write_tsv(
             tmp_path / "label_input.tsv",
             [
@@ -530,7 +533,8 @@ class TestParseLabelInput:
 
 
 class TestLabelInputIntegration:
-    """Verify that label_input feeds through parse() into LabelingExperiments."""
+    """Verify that label_input feeds through parse() into
+    LabelingExperiments."""
 
     def test_tracers_present_in_experiment(self, tmp_path):
         _minimal_reactions_tsv(tmp_path)
@@ -548,7 +552,8 @@ class TestLabelInputIntegration:
         assert exp.tracers[0].metabolite == "A"
 
     def test_tracers_alone_create_experiment(self, tmp_path):
-        """An experiment is created even when there are only tracers (no measurements)."""
+        """An experiment is created even when there are only tracers (no
+        measurements)."""
         _minimal_reactions_tsv(tmp_path)
         _write_tsv(
             tmp_path / "label_input.tsv",
@@ -681,7 +686,8 @@ class TestParseFluxBounds:
         assert "R2 <= 80.0" in exprs
 
     def test_returns_net_constraints(self, tmp_path):
-        """Flux bounds go into NetConstraints; xch and metabolitesize are None."""
+        """Flux bounds go into NetConstraints; xch and metabolitesize
+        are None."""
         _write_tsv(
             tmp_path / "flux_bounds.tsv",
             ["#reaction_id\tlo\thi", "R1\t0\t100"],
@@ -698,7 +704,8 @@ class TestParseFluxBounds:
 
 
 class TestFluxBoundsIntegration:
-    """Verify that flux_bounds feeds through parse() into FluxomicsData.constraints."""
+    """Verify that flux_bounds feeds through parse() into
+    FluxomicsData.constraints."""
 
     def test_constraints_present_on_model(self, tmp_path):
         _minimal_reactions_tsv(tmp_path)

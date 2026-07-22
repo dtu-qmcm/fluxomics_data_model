@@ -124,7 +124,6 @@ class FluxMLParser:
         Raises:
             ValueError: If the file cannot be parsed (XML error, encoding
                 failure, or internal validation failure).
-            FileNotFoundError: If *file_path* does not exist.
         """
         try:
             # Try to parse with different encodings
@@ -162,11 +161,18 @@ class FluxMLParser:
         .. deprecated::
             Use :meth:`parse` instead, which satisfies the
             :class:`~fluxomics_data_converter.io.base.FluxomicsParser` protocol.
+
+        Returns:
+            The parsed :class:`~fluxomics_data_converter.FluxomicsData`.
         """
         return self.parse(file_path)
 
     def _parse_fluxml(self, root: ET.Element) -> FluxomicsData:
-        """Parse the root fluxml element."""
+        """Parse the root fluxml element.
+
+        Returns:
+            The parsed :class:`FluxomicsData`.
+        """
         # Handle namespace prefix
         if root.tag.startswith("{"):
             # Namespaced element
@@ -197,7 +203,12 @@ class FluxMLParser:
     def _parse_metadata(
         self, metadata_elem: Optional[ET.Element]
     ) -> Optional[Metadata]:
-        """Parse metadata element."""
+        """Parse metadata element.
+
+        Returns:
+            The parsed :class:`Metadata`, or None if *metadata_elem*
+            is None.
+        """
         if metadata_elem is None:
             return None
 
@@ -229,7 +240,14 @@ class FluxMLParser:
         )
 
     def _parse_model(self, rn_elem: ET.Element) -> MetabolicNetworkModel:
-        """Parse reactionnetwork element into Model object."""
+        """Parse reactionnetwork element into Model object.
+
+        Returns:
+            The parsed :class:`MetabolicNetworkModel`.
+
+        Raises:
+            ValueError: If *rn_elem* is None or missing required elements.
+        """
         if rn_elem is None:
             raise ValueError("reactionnetwork element is required")
 
@@ -265,7 +283,14 @@ class FluxMLParser:
         )
 
     def _parse_metabolite(self, pool_elem: ET.Element) -> Metabolite:
-        """Parse metabolite (pool) element."""
+        """Parse metabolite (pool) element.
+
+        Returns:
+            The parsed :class:`Metabolite`.
+
+        Raises:
+            ValueError: If the pool element has no ``id`` attribute.
+        """
         metabolite_id = pool_elem.get("id")
         if not metabolite_id:
             raise ValueError("Metabolite (pool) must have an id attribute")
@@ -297,7 +322,14 @@ class FluxMLParser:
         )
 
     def _parse_reaction(self, reaction_elem: ET.Element) -> Reaction:
-        """Parse reaction element."""
+        """Parse reaction element.
+
+        Returns:
+            A tuple of (Reaction, atom_mapping or None).
+
+        Raises:
+            ValueError: If the reaction, reactant, or product lacks an id.
+        """
         reaction_id = reaction_elem.get("id")
         if not reaction_id:
             raise ValueError("Reaction must have an id attribute")
@@ -417,7 +449,8 @@ class FluxMLParser:
                     ]
                     all_combinations = list(product(*variant_lists))
 
-                    # If atom_transition_ids doesn't match, derive from base name
+                    # If atom_transition_ids doesn't match, derive
+                    # from base name
                     base_name = atom_transition_ids[0].split("___")[0]
                     expected_count = len(all_combinations)
                     if len(atom_transition_ids) != expected_count:
@@ -542,7 +575,14 @@ class FluxMLParser:
         ), atom_mapping
 
     def _parse_annotation(self, ann_elem: ET.Element) -> Annotation:
-        """Parse annotation element."""
+        """Parse annotation element.
+
+        Returns:
+            The parsed :class:`Annotation`.
+
+        Raises:
+            ValueError: If the annotation has no ``name`` attribute.
+        """
         name = ann_elem.get("name")
         if not name:
             raise ValueError("Annotation must have a name attribute")
@@ -553,7 +593,12 @@ class FluxMLParser:
     def _parse_constraints(
         self, constraints_elem: Optional[ET.Element]
     ) -> Optional[Constraints]:
-        """Parse constraints element."""
+        """Parse constraints element.
+
+        Returns:
+            The parsed :class:`Constraints`, or None if *constraints_elem*
+            is None.
+        """
         if constraints_elem is None:
             return None
 
@@ -588,21 +633,33 @@ class FluxMLParser:
         return Constraints(net=net, xch=xch, metabolitesize=psize)
 
     def _parse_net_constraints(self, net_elem: ET.Element) -> NetConstraints:
-        """Parse net constraints element."""
+        """Parse net constraints element.
+
+        Returns:
+            The parsed :class:`NetConstraints`.
+        """
         formulas = self._parse_constraint_formulas(net_elem)
         return NetConstraints(formulas=formulas)
 
     def _parse_xch_constraints(
         self, xch_elem: ET.Element
     ) -> ExchangeConstraints:
-        """Parse xch constraints element."""
+        """Parse xch constraints element.
+
+        Returns:
+            The parsed :class:`ExchangeConstraints`.
+        """
         formulas = self._parse_constraint_formulas(xch_elem)
         return ExchangeConstraints(formulas=formulas)
 
     def _parse_metabolitesize_constraints(
         self, psize_elem: ET.Element
     ) -> MetaboliteSizeConstraints:
-        """Parse psize constraints element."""
+        """Parse psize constraints element.
+
+        Returns:
+            The parsed :class:`MetaboliteSizeConstraints`.
+        """
         formulas = self._parse_constraint_formulas(psize_elem)
         return MetaboliteSizeConstraints(formulas=formulas)
 
@@ -616,6 +673,9 @@ class FluxMLParser:
             - bmALA>=0.75*0.22601*mu;
             - uptGLYC=.5154448999999999;
             - ratio: uptUGlyc=0.12*uptGLYC;
+
+        Returns:
+            A list of parsed constraint formulas.
         """
         from ..model.constraint import ConstraintFormula
 
@@ -670,7 +730,11 @@ class FluxMLParser:
         return formulas
 
     def _parse_textual_or_math(self, elem: ET.Element) -> TextualOrMath:
-        """Parse textual or MathML content."""
+        """Parse textual or MathML content.
+
+        Returns:
+            The parsed :class:`TextualOrMath`.
+        """
         ns_prefix = self._get_namespace_prefix(elem)
 
         textual_elem = elem.find(f"{ns_prefix}textual")
@@ -691,7 +755,14 @@ class FluxMLParser:
     def _parse_experiments(
         self, config_elem: ET.Element
     ) -> LabelingExperiments:
-        """Parse configuration element into a LabelingExperiments object."""
+        """Parse configuration element into a LabelingExperiments object.
+
+        Returns:
+            The parsed :class:`LabelingExperiments`.
+
+        Raises:
+            ValueError: If the configuration has no ``name`` attribute.
+        """
         name = config_elem.get("name")
         if not name:
             raise ValueError(
@@ -749,7 +820,14 @@ class FluxMLParser:
         )
 
     def _parse_tracer(self, input_elem: ET.Element) -> Tracers:
-        """Parse input element into a Tracers object."""
+        """Parse input element into a Tracers object.
+
+        Returns:
+            The parsed :class:`Tracers`.
+
+        Raises:
+            ValueError: If the input has no ``pool`` attribute.
+        """
         metabolite = input_elem.get("pool")
         if not metabolite:
             raise ValueError("Tracer (input) must have a pool attribute")
@@ -773,7 +851,14 @@ class FluxMLParser:
         )
 
     def _parse_label(self, label_elem: ET.Element) -> LabelComposition:
-        """Parse label element."""
+        """Parse label element.
+
+        Returns:
+            The parsed :class:`LabelComposition`.
+
+        Raises:
+            ValueError: If the label has no ``cfg`` attribute.
+        """
         cfg = label_elem.get("cfg")
         if not cfg:
             raise ValueError("Label must have a cfg attribute")
@@ -799,7 +884,14 @@ class FluxMLParser:
         )
 
     def _parse_measurement(self, measurement_elem: ET.Element) -> Measurement:
-        """Parse measurement element according to FluxML schema."""
+        """Parse measurement element according to FluxML schema.
+
+        Returns:
+            The parsed :class:`Measurement`.
+
+        Raises:
+            ValueError: If the measurement lacks a model or data element.
+        """
         ns_prefix = self._get_namespace_prefix(measurement_elem)
 
         # Parse model section (required)
@@ -819,7 +911,11 @@ class FluxMLParser:
     def _parse_measurement_model(
         self, model_elem: ET.Element
     ) -> MeasurementModel:
-        """Parse measurement model element."""
+        """Parse measurement model element.
+
+        Returns:
+            The parsed :class:`MeasurementModel`.
+        """
         ns_prefix = self._get_namespace_prefix(model_elem)
 
         # Parse labelingmeasurement (optional)
@@ -853,7 +949,11 @@ class FluxMLParser:
     def _parse_labeling_measurement(
         self, labeling_elem: ET.Element
     ) -> LabelingMeasurement:
-        """Parse labelingmeasurement element."""
+        """Parse labelingmeasurement element.
+
+        Returns:
+            The parsed :class:`LabelingMeasurement`.
+        """
         ns_prefix = self._get_namespace_prefix(labeling_elem)
 
         groups = []
@@ -866,7 +966,14 @@ class FluxMLParser:
         return LabelingMeasurement(groups=groups)
 
     def _parse_group(self, group_elem: ET.Element) -> Group:
-        """Parse group element."""
+        """Parse group element.
+
+        Returns:
+            The parsed :class:`Group`.
+
+        Raises:
+            ValueError: If the group has no ``id`` attribute.
+        """
         group_id = group_elem.get("id")
         if not group_id:
             raise ValueError("Group must have an id attribute")
@@ -901,7 +1008,11 @@ class FluxMLParser:
         )
 
     def _parse_flux_measurement(self, flux_elem: ET.Element) -> FluxMeasurement:
-        """Parse fluxmeasurement element."""
+        """Parse fluxmeasurement element.
+
+        Returns:
+            The parsed :class:`FluxMeasurement`.
+        """
         ns_prefix = self._get_namespace_prefix(flux_elem)
 
         net_fluxes = []
@@ -915,7 +1026,14 @@ class FluxMLParser:
         return FluxMeasurement(net_fluxes=net_fluxes, xch_fluxes=xch_fluxes)
 
     def _parse_netflux(self, netflux_elem: ET.Element) -> NetFlux:
-        """Parse netflux element."""
+        """Parse netflux element.
+
+        Returns:
+            The parsed :class:`NetFlux`.
+
+        Raises:
+            ValueError: If the netflux has no ``id`` attribute.
+        """
         netflux_id = netflux_elem.get("id")
         if not netflux_id:
             raise ValueError("NetFlux must have an id attribute")
@@ -938,7 +1056,14 @@ class FluxMLParser:
         )
 
     def _parse_xchflux(self, xchflux_elem: ET.Element) -> ExchangeFlux:
-        """Parse xchflux element."""
+        """Parse xchflux element.
+
+        Returns:
+            The parsed :class:`ExchangeFlux`.
+
+        Raises:
+            ValueError: If the xchflux has no ``id`` attribute.
+        """
         xchflux_id = xchflux_elem.get("id")
         if not xchflux_id:
             raise ValueError("ExchangeFlux must have an id attribute")
@@ -963,7 +1088,11 @@ class FluxMLParser:
     def _parse_metabolitesize_measurement(
         self, poolsize_elem: ET.Element
     ) -> MetaboliteSizeMeasurement:
-        """Parse poolsizemeasurement element."""
+        """Parse poolsizemeasurement element.
+
+        Returns:
+            The parsed :class:`MetaboliteSizeMeasurement`.
+        """
         ns_prefix = self._get_namespace_prefix(poolsize_elem)
 
         metabolite_sizes = []
@@ -977,7 +1106,14 @@ class FluxMLParser:
     def _parse_metabolitesize(
         self, poolsize_elem: ET.Element
     ) -> MetaboliteSize:
-        """Parse poolsize element."""
+        """Parse poolsize element.
+
+        Returns:
+            The parsed :class:`MetaboliteSize`.
+
+        Raises:
+            ValueError: If the poolsize has no ``id`` attribute.
+        """
         metabolitesize_id = poolsize_elem.get("id")
         if not metabolitesize_id:
             raise ValueError(
@@ -1002,7 +1138,11 @@ class FluxMLParser:
         )
 
     def _parse_measurement_data(self, data_elem: ET.Element) -> MeasurementData:
-        """Parse measurement data element."""
+        """Parse measurement data element.
+
+        Returns:
+            The parsed :class:`MeasurementData`.
+        """
         ns_prefix = self._get_namespace_prefix(data_elem)
 
         data = []
@@ -1017,6 +1157,9 @@ class FluxMLParser:
         Some FluxML files have truncated exponents like 'e-0' where the final
         digit was lost (e.g., '8.769e-07' became '8.769e-0'). Since the lost
         digit cannot be recovered, the value is set to 0.0 with a warning.
+
+        Returns:
+            The parsed float value, or 0.0 if the notation is malformed.
         """
         stripped = value_text.strip()
         if re.search(r"e[+-]0$", stripped):
@@ -1030,7 +1173,14 @@ class FluxMLParser:
         return float(stripped)
 
     def _parse_datum(self, datum_elem: ET.Element) -> Datum:
-        """Parse datum element."""
+        """Parse datum element.
+
+        Returns:
+            The parsed :class:`Datum`.
+
+        Raises:
+            ValueError: If the datum lacks an id, stddev, or value.
+        """
         datum_id = datum_elem.get("id")
         if not datum_id:
             raise ValueError("Datum must have an id attribute")
@@ -1081,7 +1231,11 @@ class FluxMLParser:
         )
 
     def _parse_simulation(self, simulation_elem: ET.Element) -> Simulation:
-        """Parse simulation element."""
+        """Parse simulation element.
+
+        Returns:
+            The parsed :class:`Simulation`.
+        """
         sim_type = simulation_elem.get("type", "auto")
         method = simulation_elem.get("method", "auto")
 
@@ -1118,7 +1272,14 @@ class FluxMLParser:
 
         Per the FluxML spec::
 
-            <fluxvalue flux="Glc_upt" type="net" ed-weight="0.8">2.234</fluxvalue>
+            <fluxvalue flux="Glc_upt" type="net"
+                ed-weight="0.8">2.234</fluxvalue>
+
+        Returns:
+            The parsed :class:`FluxValue`.
+
+        Raises:
+            ValueError: If the element has no ``flux`` attribute.
         """
         flux = flux_elem.get("flux")
         if not flux:
@@ -1179,6 +1340,12 @@ class FluxMLParser:
         Per the FluxML spec::
 
             <poolsizevalue pool="Ala" edweight="0.1">0.4654</poolsizevalue>
+
+        Returns:
+            The parsed :class:`MetaboliteSizeValue`.
+
+        Raises:
+            ValueError: If the element has no ``pool`` attribute.
         """
         pool = met_elem.get("pool")
         if not pool:
@@ -1223,13 +1390,21 @@ class FluxMLParser:
         )
 
     def _get_namespace_prefix(self, elem: ET.Element) -> str:
-        """Get namespace prefix for element."""
+        """Get namespace prefix for element.
+
+        Returns:
+            The namespace prefix string, or empty string if none.
+        """
         if elem.tag.startswith("{"):
             return elem.tag.split("}")[0] + "}"
         return ""
 
     def _get_text(self, elem: Optional[ET.Element]) -> Optional[str]:
-        """Get text content from element."""
+        """Get text content from element.
+
+        Returns:
+            The stripped text content, or None if *elem* is None or empty.
+        """
         if elem is None:
             return None
         return elem.text.strip() if elem.text else None

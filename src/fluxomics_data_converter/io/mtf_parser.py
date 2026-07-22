@@ -113,6 +113,9 @@ class MTFParser:
 
         Returns:
             FluxomicsData containing the parsed data
+
+        Raises:
+            FileNotFoundError: If the required .netw file does not exist.
         """
         base_path = Path(base_path)
 
@@ -335,6 +338,12 @@ class MTFParser:
         - Operator: ==, >=, <=
 
         Also adds automatic constraints for <->> reactions (net flux >= 0).
+
+        Returns:
+            A Constraints object, or None if no constraints were found.
+
+        Raises:
+            ValueError: If an error occurs while parsing the .cnstr file.
         """
         net_formulas = []
         xch_formulas = []
@@ -412,6 +421,12 @@ class MTFParser:
         Format (TSV): Id\tComment\tMetabolite\tIsotopomer\tValue
         - Isotopomer: Binary string (e.g., "111111", "100000")
         - Value: Fraction (0-1)
+
+        Returns:
+            A list of Tracers, or None if no tracers were found.
+
+        Raises:
+            ValueError: If an error occurs while parsing the .linp file.
         """
         linp_path = base_path.with_suffix(".linp")
         if not linp_path.exists():
@@ -474,7 +489,11 @@ class MTFParser:
         return tracers
 
     def _parse_measurements(self, base_path: Path) -> Optional[Measurement]:
-        """Parse measurement files (.miso, .mflux, .mmet)."""
+        """Parse measurement files (.miso, .mflux, .mmet).
+
+        Returns:
+            A Measurement object, or None if no measurements were found.
+        """
         # Parse MS isotopomer measurements
         labeling_measurement, labeling_data = self._parse_miso(base_path)
 
@@ -515,6 +534,13 @@ class MTFParser:
 
         Output FluxML format: <group id="MS-1"><textual>
         Suc[1-4]#M0,1,2,3,4</textual></group>
+
+        Returns:
+            A tuple of (LabelingMeasurement, list of Datum), or
+            (None, None) if no measurements were found.
+
+        Raises:
+            ValueError: If an error occurs while parsing the .miso file.
         """
         miso_path = base_path.with_suffix(".miso")
         if not miso_path.exists():
@@ -685,6 +711,13 @@ class MTFParser:
         r"""Parse .mflux file containing flux measurements.
 
         Format (TSV): Id\tComment\tFlux\tValue\tSD
+
+        Returns:
+            A tuple of (FluxMeasurement, list of Datum), or
+            (None, None) if no measurements were found.
+
+        Raises:
+            ValueError: If an error occurs while parsing the .mflux file.
         """
         mflux_path = base_path.with_suffix(".mflux")
         if not mflux_path.exists():
@@ -747,6 +780,13 @@ class MTFParser:
         r"""Parse .mmet file containing metabolite concentration measurements.
 
         Format (TSV): Id\tComment\tSpecie\tValue\tSD
+
+        Returns:
+            A tuple of (MetaboliteSizeMeasurement, list of Datum), or
+            (None, None) if no measurements were found.
+
+        Raises:
+            ValueError: If an error occurs while parsing the .mmet file.
         """
         mmet_path = base_path.with_suffix(".mmet")
         if not mmet_path.exists():
@@ -809,6 +849,12 @@ class MTFParser:
 
         - Kind: NET or XCH
         - Type: F (Free), D (Dependent), C (Constrained)
+
+        Returns:
+            A Simulation object, or None if no variables were found.
+
+        Raises:
+            ValueError: If an error occurs while parsing the .tvar file.
         """
         tvar_path = base_path.with_suffix(".tvar")
         if not tvar_path.exists():

@@ -53,7 +53,8 @@ class FluxMLWriter:
     def _compute_metabolite_atom_counts(self) -> Dict[str, int]:
         """Compute atom counts for metabolites by scanning atom transitions.
 
-        Returns a dict mapping metabolite id to atom count.
+        Returns:
+            A dict mapping metabolite id to atom count.
         """
         atom_counts: Dict[str, int] = {}
 
@@ -87,7 +88,8 @@ class FluxMLWriter:
 
         return atom_counts
 
-    # Natural abundance of 13C per carbon position, as used by x3cflux internally.
+    # Natural abundance of 13C per carbon position, as used by
+    # x3cflux internally.
     # Source: x3cflux/src/main/cpp/model/system/NaturalLabelingInitializer.cpp
     NATURAL_ABUNDANCE_CARBON: float = 0.01109
 
@@ -143,7 +145,11 @@ class FluxMLWriter:
             f.write("\n".join(cleaned_lines))
 
     def _build_fluxml(self) -> ET.Element:
-        """Build the root fluxml element."""
+        """Build the root fluxml element.
+
+        Returns:
+            The root ``<fluxml>`` XML element.
+        """
         # Register namespace - use empty prefix for default namespace
         ET.register_namespace("", self.NAMESPACE)
 
@@ -229,9 +235,10 @@ class FluxMLWriter:
         for reaction in self._model.model.reactions:
             self._add_reaction(rn, reaction)
 
-        # Add drain reactions for sink metabolites (produced but never consumed).
-        # 13CFlux2 / x3cflux requires every output metabolite to have an explicit
-        # sink reaction so the network can be validated as structurally consistent.
+        # Add drain reactions for sink metabolites (produced but
+        # never consumed).  13CFlux2 / x3cflux requires every output
+        # metabolite to have an explicit sink reaction so the network
+        # can be validated as structurally consistent.
         consumed: set = set()
         produced: set = set()
         for rxn in self._model.model.reactions:
@@ -337,7 +344,11 @@ class FluxMLWriter:
         cpd_id: str,
         position: int,
     ) -> Optional[str]:
-        """Build FluxML cfg string for a reactant."""
+        """Build FluxML cfg string for a reactant.
+
+        Returns:
+            The cfg string, or None if no atom mapping exists.
+        """
         if not atom_mapping.maps:
             return None
 
@@ -390,7 +401,11 @@ class FluxMLWriter:
         position: int,
         atom_map_id: Optional[str] = None,
     ) -> Optional[str]:
-        """Build FluxML cfg string for a product."""
+        """Build FluxML cfg string for a product.
+
+        Returns:
+            The cfg string, or None if no atom mapping exists.
+        """
         if not atom_mapping.maps:
             return None
 
@@ -584,7 +599,8 @@ class FluxMLWriter:
         )
         new_drain_ids = [f"{m}_out" for m in sink_mets]
 
-        # Collect ALL reaction IDs (model + new drains) that need a value written.
+        # Collect ALL reaction IDs (model + new drains) that need a
+        # value written.
         rxn_names = [r.id for r in reactions]
         all_names = rxn_names + new_drain_ids  # new drains appended at end
         missing = [n for n in all_names if n not in stored_ids]
@@ -731,12 +747,16 @@ class FluxMLWriter:
                 self._apply_na_to_data(data_elem)
 
     def _na_correction_matrix(self, n_C: int) -> "np.ndarray":
-        """Binomial ¹³C natural-abundance correction matrix M_C of size (n_C+1)×(n_C+1).
+        """Binomial ¹³C natural-abundance correction matrix M_C.
 
-        M_C[i,j] = Binom(n_C-j, i-j, p) for i>=j, else 0.
+        The matrix has size ``(n_C+1) × (n_C+1)``.
+        ``M_C[i,j] = Binom(n_C-j, i-j, p)`` for ``i>=j``, else 0.
         Transforms a pure-tracer (no NA) MID vector into the expected
-        measured (with NA) MID: mid_measured = M_C @ mid_tracer.
-        p = NATURAL_ABUNDANCE_CARBON = 0.01109 (x3cflux hardcoded constant).
+        measured (with NA) MID: ``mid_measured = M_C @ mid_tracer``.
+        ``p = NATURAL_ABUNDANCE_CARBON = 0.01109`` (x3cflux constant).
+
+        Returns:
+            The natural-abundance correction matrix.
         """
         import numpy as np
         from scipy.stats import binom as sp_binom
@@ -751,11 +771,12 @@ class FluxMLWriter:
         return M
 
     def _apply_na_to_data(self, data_elem: ET.Element) -> None:
-        """Re-write <datum> children of data_elem with ¹³C NA correction applied.
+        """Re-write <datum> children of data_elem with ¹³C NA correction.
 
-        Groups datums by group id, applies M_C to each group's (value, stddev)
-        vectors, and rewrites the text / stddev attributes in place.
-        Only groups with integer weights (MS isotopologue data) are corrected.
+        Groups datums by group id, applies M_C to each group's
+        (value, stddev) vectors, and rewrites the text / stddev
+        attributes in place.  Only groups with integer weights (MS
+        isotopologue data) are corrected.
         """
         import numpy as np
 
@@ -842,9 +863,10 @@ def write_fluxml(
     Args:
         model: FluxomicsData to write
         filepath: Path to output file
-        apply_na_correction: Apply ¹³C natural abundance correction (p=0.01109/C)
-            to all MS measurement data.  Use when data is synthetic (no NA present)
-            and the target tool is x3cflux (which models NA internally).
+        apply_na_correction: Apply ¹³C natural abundance
+            correction (p=0.01109/C) to all MS measurement data.
+            Use when data is synthetic (no NA present) and the
+            target tool is x3cflux (which models NA internally).
     """
     writer = FluxMLWriter()
     writer.write(model, filepath, apply_na_correction=apply_na_correction)

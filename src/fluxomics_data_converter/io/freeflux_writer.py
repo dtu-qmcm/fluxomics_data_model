@@ -75,7 +75,16 @@ class FreefluxWriter:
         model: FluxomicsData,
         experiment_name: Optional[str],
     ) -> Optional[LabelingExperiments]:
-        """Resolve which experiment to write."""
+        """Resolve which experiment to write.
+
+        Returns:
+            The resolved LabelingExperiments object, or None if no
+            experiments exist.
+
+        Raises:
+            ValueError: If the specified experiment name is not found, or
+                if multiple experiments exist and no name is given.
+        """
         if not model.experiments:
             return None
 
@@ -131,6 +140,9 @@ class FreefluxWriter:
           write them directly with multiplicities
         - If maps differ (variant reactions), group per-position variants
           using comma-separated atom strings
+
+        Returns:
+            Formatted reaction side string with compound(atom) notation.
         """
         import re
 
@@ -275,7 +287,11 @@ class FreefluxWriter:
     def _build_computational_to_base_map(
         self, model: FluxomicsData
     ) -> Dict[str, str]:
-        """Map computational IDs (e.g., V4___1) back to base IDs (V4)."""
+        """Map computational IDs (e.g., V4___1) back to base IDs (V4).
+
+        Returns:
+            Dict mapping computational IDs to their base reaction IDs.
+        """
         mapping = {}
         for rxn in model.model.reactions:
             if rxn.atom_transition_ids:

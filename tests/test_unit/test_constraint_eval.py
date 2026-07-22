@@ -69,7 +69,8 @@ class TestConstraintEvaluator:
         assert np.isclose(rhs_value, expected_rhs)
 
         # Test evaluation: residual should be >= 0 when constraint is satisfied
-        # If bmALA = 0.01 and rhs = 0.005085225, residual = 0.01 - 0.005085225 > 0
+        # If bmALA = 0.01 and rhs = 0.005085225,
+        # residual = 0.01 - 0.005085225 > 0
         flux_vector = jnp.array([0.01, 0.03])
         residual = constraint_fn(flux_vector)
         assert residual >= 0  # Constraint satisfied
@@ -292,7 +293,8 @@ class TestConstraintEvaluatorIntegration:
                 print(f"✓ Parsed: {formula.expression}")
                 print(f"  Operator: {operator}, RHS: {rhs_value}")
             except Exception as e:
-                # Some constraints might reference undefined reactions/parameters
+                # Some constraints might reference undefined
+                # reactions/parameters
                 print(f"✗ Failed to parse: {formula.expression}")
                 print(f"  Error: {e}")
 
@@ -316,7 +318,8 @@ class TestConstraintEvaluatorIntegration:
                     parts = formula.expression.split("=", 1)
                     lhs = parts[0].strip()
                     rhs = parts[1].strip()
-                    # If LHS is a single symbol and RHS is numeric, treat as parameter
+                    # If LHS is a single symbol and RHS is numeric,
+                    # treat as parameter
                     if lhs.isidentifier():
                         try:
                             parameters[lhs] = float(rhs)

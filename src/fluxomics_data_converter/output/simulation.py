@@ -112,7 +112,14 @@ class Variables(BaseModel):
     @field_validator("flux_values")
     @classmethod
     def validate_unique_flux_ids(cls, v: List[FluxValue]) -> List[FluxValue]:
-        """Validate flux IDs are unique."""
+        """Validate flux IDs are unique.
+
+        Returns:
+            The validated list of flux values.
+
+        Raises:
+            ValueError: If ``(flux, type)`` pairs are not unique.
+        """
         ids = [(fv.flux, fv.type) for fv in v]
         if len(set(ids)) != len(ids):
             raise ValueError("Flux variable (flux, type) pairs must be unique")
@@ -123,7 +130,14 @@ class Variables(BaseModel):
     def validate_unique_metabolite_ids(
         cls, v: List[MetaboliteSizeValue]
     ) -> List[MetaboliteSizeValue]:
-        """Validate metabolite IDs are unique."""
+        """Validate metabolite IDs are unique.
+
+        Returns:
+            The validated list of metabolite size values.
+
+        Raises:
+            ValueError: If metabolite IDs are not unique.
+        """
         ids = [pv.metabolite for pv in v]
         if len(set(ids)) != len(ids):
             raise ValueError(

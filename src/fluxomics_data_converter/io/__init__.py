@@ -17,16 +17,22 @@ Auto-detect format from file extension and parse::
 
 Or use format-specific convenience functions::
 
-    from fluxomics_data_converter.io import parse_fluxml_file, parse_mtf, parse_freeflux
+    from fluxomics_data_converter.io import (
+        parse_fluxml_file,
+        parse_mtf,
+        parse_freeflux,
+    )
     model = parse_fluxml_file("models/ecoli.fml")
-    model = parse_mtf("models/ecoli")          # base path without extension
-    model = parse_freeflux("models/ecoli/")    # directory containing reactions.*
+    model = parse_mtf("models/ecoli")  # base path without extension
+    model = parse_freeflux("models/ecoli/")  # dir with reactions.*
 
 Format protocols
 ----------------
-All parsers satisfy :class:`~fluxomics_data_converter.io.base.FluxomicsParser` and
-all writers satisfy :class:`~fluxomics_data_converter.io.base.FluxomicsWriter`.
-See those protocols for the expected interface when writing format-agnostic code.
+All parsers satisfy
+:class:`~fluxomics_data_converter.io.base.FluxomicsParser` and all writers
+satisfy :class:`~fluxomics_data_converter.io.base.FluxomicsWriter`.  See
+those protocols for the expected interface when writing format-agnostic
+code.
 """
 
 from pathlib import Path
@@ -71,10 +77,8 @@ def parse(path: str | Path):
 
     Raises:
         ValueError: If the file extension is not recognised.
-        FileNotFoundError: If *path* does not exist.
 
-    Examples::
-
+    Example:
         from fluxomics_data_converter.io import parse
 
         model = parse("data/ecoli.fml")

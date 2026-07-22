@@ -54,7 +54,11 @@ class TextualOrMath(BaseModel):
         frozen = True
 
     def __init__(self, **data):
-        """Initialise, requiring at least one of textual or mathml."""
+        """Initialise, requiring at least one of textual or mathml.
+
+        Raises:
+            ValueError: If neither textual nor mathml is provided.
+        """
         super().__init__(**data)
         if not self.textual and not self.mathml:
             raise ValueError("Either textual or mathml must be provided")
@@ -97,11 +101,19 @@ class JAXArray(BaseModel):
 
     @classmethod
     def from_jax_array(cls, arr: jnp.ndarray) -> "JAXArray":
-        """Create from JAX array."""
+        """Create from JAX array.
+
+        Returns:
+            A new ``JAXArray`` wrapping the given JAX array.
+        """
         return cls(shape=arr.shape, dtype=str(arr.dtype), data=arr.tolist())
 
     def to_jax_array(self) -> jnp.ndarray:
-        """Convert to JAX array."""
+        """Convert to JAX array.
+
+        Returns:
+            The reconstructed JAX array.
+        """
         return jnp.array(self.data, dtype=self.dtype).reshape(self.shape)
 
 
@@ -124,7 +136,11 @@ class TimeSeries(BaseModel):
         values: jnp.ndarray,
         errors: Optional[jnp.ndarray] = None,
     ) -> "TimeSeries":
-        """Create from JAX arrays."""
+        """Create from JAX arrays.
+
+        Returns:
+            A new ``TimeSeries`` built from the given JAX arrays.
+        """
         return cls(
             times=JAXArray.from_jax_array(times),
             values=JAXArray.from_jax_array(values),
@@ -136,7 +152,12 @@ class TimeSeries(BaseModel):
     def to_arrays(
         self,
     ) -> tuple[jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray]]:
-        """Convert to JAX arrays."""
+        """Convert to JAX arrays.
+
+        Returns:
+            A tuple of ``(times, values, errors)`` JAX arrays, where
+            ``errors`` may be ``None``.
+        """
         return (
             self.times.to_jax_array(),
             self.values.to_jax_array(),
@@ -200,7 +221,12 @@ class AtomTransitionsNetwork(dict):
     def __get_pydantic_core_schema__(
         cls, source_type: Any, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
-        """Get Pydantic core schema for serialization/validation."""
+        """Get Pydantic core schema for serialization/validation.
+
+        Returns:
+            A Pydantic core schema that validates as a dict and returns
+            an ``AtomTransitionsNetwork``.
+        """
         # Get the schema for a dict
         dict_schema = handler.generate_schema(dict)
 
@@ -268,7 +294,11 @@ class DictList(list, Generic[T]):
         self._dict = {item.id: idx for idx, item in enumerate(self)}
 
     def _check_id(self, item_id: str) -> None:
-        """Check if an ID already exists in the DictList."""
+        """Check if an ID already exists in the DictList.
+
+        Raises:
+            ValueError: If the ID is already present in the list.
+        """
         if item_id in self._dict:
             raise ValueError(f"ID '{item_id}' is already present in the list")
 
@@ -319,7 +349,11 @@ class DictList(list, Generic[T]):
         self.pop(index)
 
     def pop(self, index: int = -1) -> T:
-        """Remove and return item at index (default last)."""
+        """Remove and return item at index (default last).
+
+        Returns:
+            The item removed from the list.
+        """
         item = list.pop(self, index)
 
         # Remove from dict
@@ -339,7 +373,14 @@ class DictList(list, Generic[T]):
         self._dict.clear()
 
     def index(self, item: Union[str, T], start: int = 0, stop: int = -1) -> int:
-        """Return index of item in the list."""
+        """Return index of item in the list.
+
+        Returns:
+            The index of the item in the list.
+
+        Raises:
+            ValueError: If the item (looked up by ID) is not in the list.
+        """
         if isinstance(item, str):
             # Look up by ID
             if item not in self._dict:
@@ -352,13 +393,27 @@ class DictList(list, Generic[T]):
             )
 
     def get_by_id(self, item_id: str) -> T:
-        """Get item by its ID attribute."""
+        """Get item by its ID attribute.
+
+        Returns:
+            The item with the given ID.
+
+        Raises:
+            KeyError: If no item with the given ID exists.
+        """
         if item_id not in self._dict:
             raise KeyError(f"No item with ID '{item_id}'")
         return self[self._dict[item_id]]
 
     def get_by_any(self, key: Union[str, int, T]) -> T:
-        """Get item by ID, index, or the item itself."""
+        """Get item by ID, index, or the item itself.
+
+        Returns:
+            The item matching the given key.
+
+        Raises:
+            ValueError: If the item cannot be found in the DictList.
+        """
         if isinstance(key, int):
             return self[key]
         elif isinstance(key, str):
@@ -369,7 +424,11 @@ class DictList(list, Generic[T]):
             raise ValueError(f"Item {key} not found in DictList")
 
     def has_id(self, item_id: str) -> bool:
-        """Check if an ID exists in the DictList."""
+        """Check if an ID exists in the DictList.
+
+        Returns:
+            True if the ID exists, False otherwise.
+        """
         return item_id in self._dict
 
     def list_attr(self, attr: str) -> List[Any]:
@@ -377,14 +436,22 @@ class DictList(list, Generic[T]):
         return [getattr(item, attr) for item in self]
 
     def __contains__(self, item: Union[str, T]) -> bool:
-        """Check if item or ID is in the DictList."""
+        """Check if item or ID is in the DictList.
+
+        Returns:
+            True if the item or ID is present, False otherwise.
+        """
         if isinstance(item, str):
             return item in self._dict
         else:
             return list.__contains__(self, item)
 
     def __getitem__(self, key: Union[int, slice, str]) -> Union[T, List[T]]:
-        """Get item by index, slice, or ID."""
+        """Get item by index, slice, or ID.
+
+        Returns:
+            The item (for int/str keys) or a new ``DictList`` (for slices).
+        """
         if isinstance(key, str):
             return self.get_by_id(key)
         elif isinstance(key, slice):
@@ -396,7 +463,13 @@ class DictList(list, Generic[T]):
             return list.__getitem__(self, key)
 
     def __setitem__(self, index: int, item: T) -> None:
-        """Set item at index."""
+        """Set item at index.
+
+        Raises:
+            TypeError: If the index is not an integer.
+            ValueError: If the new item's ID conflicts with an existing
+                ID at a different index.
+        """
         if not isinstance(index, int):
             raise TypeError("DictList indices must be integers")
 
@@ -432,7 +505,11 @@ class DictList(list, Generic[T]):
                     self._dict[key] = idx - 1
 
     def __repr__(self) -> str:
-        """String representation of DictList with summary information."""
+        """String representation of DictList with summary information.
+
+        Returns:
+            A multi-line string summarising the contents of the DictList.
+        """
         if not self:
             return "DictList([])"
 
@@ -459,7 +536,11 @@ class DictList(list, Generic[T]):
         return "\n".join(lines)
 
     def _metabolite_summary(self) -> List[str]:
-        """Generate metabolite-specific summary lines."""
+        """Generate metabolite-specific summary lines.
+
+        Returns:
+            A list of summary lines describing the metabolites.
+        """
         lines = []
 
         # Total count
@@ -512,7 +593,11 @@ class DictList(list, Generic[T]):
         return lines
 
     def _reaction_summary(self) -> List[str]:
-        """Generate reaction-specific summary lines."""
+        """Generate reaction-specific summary lines.
+
+        Returns:
+            A list of summary lines describing the reactions.
+        """
         lines = []
 
         # Total count
@@ -550,11 +635,19 @@ class DictList(list, Generic[T]):
         return lines
 
     def __copy__(self) -> "DictList[T]":
-        """Create a shallow copy of the DictList."""
+        """Create a shallow copy of the DictList.
+
+        Returns:
+            A shallow copy of this DictList.
+        """
         return DictList(self)
 
     def copy(self) -> "DictList[T]":
-        """Create a shallow copy of the DictList."""
+        """Create a shallow copy of the DictList.
+
+        Returns:
+            A shallow copy of this DictList.
+        """
         return self.__copy__()
 
     @property
@@ -566,7 +659,12 @@ class DictList(list, Generic[T]):
     def __get_pydantic_core_schema__(
         cls, source_type: Any, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
-        """Get Pydantic core schema for serialization/validation."""
+        """Get Pydantic core schema for serialization/validation.
+
+        Returns:
+            A Pydantic core schema that validates as a list and returns
+            a ``DictList``.
+        """
         # Get the inner type from the generic
         if hasattr(source_type, "__args__") and source_type.__args__:
             inner_type = source_type.__args__[0]

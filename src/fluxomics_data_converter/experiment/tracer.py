@@ -64,7 +64,14 @@ class LabelComposition(BaseModel):
     @field_validator("purity")
     @classmethod
     def validate_purity(cls, v: Optional[float]) -> Optional[float]:
-        """Validate purity is between 0 and 1."""
+        """Validate purity is between 0 and 1.
+
+        Returns:
+            The validated purity value, or ``None`` if it was ``None``.
+
+        Raises:
+            ValueError: If purity is not between 0 and 1.
+        """
         if v is None:
             return v
         if not 0.0 <= v <= 1.0:
@@ -74,7 +81,14 @@ class LabelComposition(BaseModel):
     @field_validator("cost")
     @classmethod
     def validate_cost(cls, v: Optional[float]) -> Optional[float]:
-        """Validate cost is positive."""
+        """Validate cost is positive.
+
+        Returns:
+            The validated cost value, or ``None`` if it was ``None``.
+
+        Raises:
+            ValueError: If cost is not positive.
+        """
         if v is None:
             return v
         if v <= 0.0:
@@ -115,6 +129,12 @@ class Tracers(BaseModel):
         Allows fractions < 1.0 when natural abundance is not explicitly
         specified (common in influx_si .linp files where the unlabeled
         remainder is implied). Raises if sum exceeds 1.0.
+
+        Returns:
+            The validated ``Tracers`` instance.
+
+        Raises:
+            ValueError: If the float fractions sum to more than 1.0.
         """
         import warnings
 
@@ -199,7 +219,11 @@ class Tracers(BaseModel):
         return jnp.array([1.0])
 
     def with_composition(self, composition: jnp.ndarray) -> "Tracers":
-        """Create new tracer with specified composition."""
+        """Create new tracer with specified composition.
+
+        Returns:
+            A new ``Tracers`` instance with the given composition array.
+        """
         return Tracers(
             id=self.id,
             metabolite=self.metabolite,
@@ -213,7 +237,11 @@ class Tracers(BaseModel):
     def with_time_profile(
         self, times: jnp.ndarray, values: jnp.ndarray
     ) -> "Tracers":
-        """Create new tracer with time profile."""
+        """Create new tracer with time profile.
+
+        Returns:
+            A new ``Tracers`` instance with the given time profile data.
+        """
         return Tracers(
             id=self.id,
             metabolite=self.metabolite,

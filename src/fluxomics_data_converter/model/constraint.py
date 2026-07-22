@@ -108,7 +108,12 @@ class ConstraintFormula(BaseModel):
             return set()
 
     def __str__(self) -> str:
-        """String representation of the constraint."""
+        """String representation of the constraint.
+
+        Returns:
+            The constraint name and expression, or just the expression
+            if no name is set.
+        """
         if self.name:
             return f"{self.name}: {self.expression}"
         return self.expression
@@ -286,7 +291,11 @@ class Constraints(BaseModel):
         return header + "\n\n".join(sections)
 
     def __repr__(self) -> str:
-        """String representation using summary."""
+        """String representation using summary.
+
+        Returns:
+            The summary string of all constraints.
+        """
         return self.summary()
 
     def get_all_variable_names(self) -> set[str]:

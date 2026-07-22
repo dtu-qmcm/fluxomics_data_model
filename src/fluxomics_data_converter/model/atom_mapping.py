@@ -56,7 +56,11 @@ class AtomMap(BaseModel):
         product_instance: int = 1,
         src_instance: int = 1,
     ) -> "AtomMap":
-        """Add a mapping from product atom to source atom."""
+        """Add a mapping from product atom to source atom.
+
+        Returns:
+            A new ``AtomMap`` with the added mapping (immutable update).
+        """
         # Create new dict to maintain immutability
         new_mapping = dict(self.mapping)
         new_mapping[
@@ -148,7 +152,11 @@ class AtomTransition(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     def __str__(self) -> str:
-        """String representation with summary metadatarmation."""
+        """String representation with summary metadatarmation.
+
+        Returns:
+            A summary string describing the atom transition.
+        """
         return self.summary()
 
     def summary(self) -> str:
@@ -311,6 +319,9 @@ class AtomTransition(BaseModel):
 
         Returns:
             Letter notation string representation of the mapping(s).
+
+        Raises:
+            KeyError: If *atom_map_id* is not found in ``self.maps``.
         """
         from collections import defaultdict
 
@@ -399,7 +410,11 @@ class AtomTransition(BaseModel):
 
             # Build reaction string for this element
             def build_side(atoms_dict):
-                """Build one side of the reaction string."""
+                """Build one side of the reaction string.
+
+                Returns:
+                    A list of ``compound(letters)`` string parts.
+                """
                 parts = []
                 for cpd in sorted(atoms_dict.keys()):
                     instances = atoms_dict[cpd]
@@ -465,7 +480,8 @@ class AtomTransition(BaseModel):
             token ::= element "#" source_atom_index "@" reactant_position
             element             ::= [A-Z]           (e.g. "C", "N")
             source_atom_index   ::= integer >= 1    (1-based atom number)
-            reactant_position   ::= integer >= 1    (1-based index into reactant_order)
+            reactant_position   ::= integer >= 1    (1-based index into
+                                                     reactant_order)
 
         Args:
             reactant_cfgs: Mapping of ``reactant_id -> cfg_string``.
@@ -557,6 +573,12 @@ class AtomTransition(BaseModel):
 
         Returns:
             FluxML-style string representation of the mapping
+
+        Raises:
+            KeyError: If *atom_map_id* is not found in ``self.maps``.
+            ValueError: If multiple maps exist and no *atom_map_id* is
+                specified, or if a source compound is not found in the
+                reactant list.
         """
         if not self.maps:
             return None
@@ -673,6 +695,9 @@ class AtomTransition(BaseModel):
 
         Returns:
             New AtomTransition with combined maps
+
+        Raises:
+            ValueError: If the two transitions belong to different reactions.
         """
         if self.reaction_id != other.reaction_id:
             raise ValueError("Can only merge mappings for the same reaction")
@@ -894,7 +919,7 @@ class AtomTransition(BaseModel):
         reactant_order: Optional[List[str]] = None,
         product_order: Optional[List[str]] = None,
     ) -> Dict[Tuple[str, int], np.ndarray]:
-        """Propagate isotopomer distributions using a weighted average over all variants.
+        """Propagate isotopomer distributions by weighted average over variants.
 
         For reactions with symmetric substrates (e.g. succinate, which is
         geometrically symmetric and can bind in two orientations),

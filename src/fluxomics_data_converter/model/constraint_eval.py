@@ -96,6 +96,10 @@ class ConstraintEvaluator:
             - Returns (fn, '>=', 0.005085225) where fn(v) =
               v[idx_bmALA] - 0.005085225
             - In optimization: fn(v) >= 0 means bmALA >= 0.005085225
+
+        Raises:
+            ValueError: If the constraint formula cannot be parsed or
+                the RHS is not numeric after parameter substitution.
         """
         # Use ConstraintFormula's built-in SymPy parser
         try:

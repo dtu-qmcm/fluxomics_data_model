@@ -51,7 +51,11 @@ class MTFWriter:
         self._metabolite_atom_counts: Dict[str, int] = {}
 
     def _compute_metabolite_atom_counts(self) -> Dict[str, int]:
-        """Infer atom counts for each metabolite from atom transitions."""
+        """Infer atom counts for each metabolite from atom transitions.
+
+        Returns:
+            A dict mapping metabolite ID to atom count.
+        """
         counts: Dict[str, int] = {}
         for atom_mapping in self._model.model.atom_mappings.values():
             if not atom_mapping.maps:
@@ -83,6 +87,10 @@ class MTFWriter:
             experiment_name: Name of experiment to write. If None and model
                             has a single experiment, uses that. If None and
                             model has multiple experiments, raises ValueError.
+
+        Raises:
+            ValueError: If experiment_name is not found, or if multiple
+                experiments exist and experiment_name is None.
         """
         self._model = model
         base_path = Path(base_path)
@@ -171,7 +179,8 @@ class MTFWriter:
 
             lines.append("#")
 
-        # Add drain reactions for sink metabolites (produced but never consumed).
+        # Add drain reactions for sink metabolites
+        # (produced but never consumed).
         # influx_si requires every measured metabolite to have at least one
         # consuming reaction to be treated as "internal" — without a drain,
         # the metabolite is external and its measurements are silently ignored.
@@ -216,9 +225,10 @@ class MTFWriter:
                     atoms = "".join(
                         chr(ord("a") + i) for i in range(min(atom_count, 26))
                     )
-                    # influx_si requires balanced atom transitions: add an external
-                    # product ({metab_id}_ext) so both sides carry the same atoms.
-                    # {metab_id}_ext only appears as a product → treated as external.
+                    # influx_si requires balanced atom transitions:
+                    # add an external product ({metab_id}_ext) so
+                    # both sides carry the same atoms. {metab_id}_ext
+                    # only appears as a product → treated as external.
                     lines.append(
                         f"{metab_id}_out: {metab_id} ({atoms}) ->> "
                         f"{metab_id}_ext ({atoms})"
@@ -231,7 +241,11 @@ class MTFWriter:
             f.write("\n".join(lines) + "\n")
 
     def _format_reaction(self, reaction) -> str:
-        """Format a single reaction line for .netw file."""
+        """Format a single reaction line for .netw file.
+
+        Returns:
+            The formatted reaction string.
+        """
         rxn_id = reaction.id
         reversible = reaction.reversibility
 
@@ -273,7 +287,10 @@ class MTFWriter:
                     atoms = "".join(
                         chr(ord("a") + i) for i in range(min(atom_count, 26))
                     )
-                    return f"{rxn_id}: {metab_id} ({atoms}) {arrow} {metab_id}_ext ({atoms})"
+                    return (
+                        f"{rxn_id}: {metab_id} ({atoms}) {arrow} "
+                        f"{metab_id}_ext ({atoms})"
+                    )
             return f"{rxn_id}: {reactants_str} {arrow}"
 
         return f"{rxn_id}: {reactants_str} {arrow} {products_str}"
@@ -284,7 +301,11 @@ class MTFWriter:
         atom_mapping: Optional[AtomTransition],
         is_reactant: bool,
     ) -> str:
-        """Format compounds with atom transitions for .netw file."""
+        """Format compounds with atom transitions for .netw file.
+
+        Returns:
+            The formatted compounds string.
+        """
         if not compounds:
             return ""
 
@@ -317,7 +338,11 @@ class MTFWriter:
         return " + ".join(parts)
 
     def _get_reactant_atoms(self, atom_map, cpd_id: str, instance: int) -> str:
-        """Get atom letter notation for a reactant compound."""
+        """Get atom letter notation for a reactant compound.
+
+        Returns:
+            The atom letter string for the reactant.
+        """
         # Build a mapping from (cpd, instance, atom_idx) -> letter
         # based on the product side mappings
 
@@ -355,7 +380,11 @@ class MTFWriter:
         return "".join(letter for _, letter in atoms)
 
     def _get_product_atoms(self, atom_map, cpd_id: str, instance: int) -> str:
-        """Get atom letter notation for a product compound."""
+        """Get atom letter notation for a product compound.
+
+        Returns:
+            The atom letter string for the product.
+        """
         # Same letter assignment as reactants
         reactant_atoms: Dict[Tuple[str, int, int], str] = {}
         letters = (
@@ -469,14 +498,20 @@ class MTFWriter:
             f.write("\n".join(lines) + "\n")
 
     def _parse_ms_expression(self, expression: str) -> Tuple[str, str]:
-        """Parse MS expression like 'Ala[2,3]' or 'F[1,2,3]#M0,1,2,3' into (metabolite, fragment).
+        """Parse an MS expression into (metabolite, fragment).
+
+        Handles expressions like 'Ala[2,3]' or 'F[1,2,3]#M0,1,2,3'.
 
         Strips the optional '#M...' MDV-weight suffix used by x3cflux / 13CFlux2
         before parsing, so both 'F[1,2,3]' and 'F[1,2,3]#M0,1,2,3' are handled.
+
+        Returns:
+            A tuple of (metabolite, fragment).
         """
         import re
 
-        # Strip optional x3cflux MDV-weight suffix: 'F[1,2,3]#M0,1,2,3' -> 'F[1,2,3]'
+        # Strip optional x3cflux MDV-weight suffix:
+        # 'F[1,2,3]#M0,1,2,3' -> 'F[1,2,3]'
         expression = expression.split("#")[0].strip()
 
         # Match patterns like "Ala[2,3]" or "Ala[2+3]" or "AKG"
@@ -486,7 +521,8 @@ class MTFWriter:
             fragment_spec = match.group(2)
 
             if fragment_spec:
-                # Expand range notation "2-4" -> "2,3,4"; normalise "2+3" -> "2,3"
+                # Expand range notation "2-4" -> "2,3,4";
+                # normalise "2+3" -> "2,3"
                 fragment = self._expand_fragment_spec(fragment_spec)
             else:
                 # Full molecule — derive from atom count if available
@@ -515,6 +551,9 @@ class MTFWriter:
         - ``"2+3+4"``  → ``"2,3,4"``  (+ → ,)
         - ``"2-4"``    → ``"2,3,4"``  (range expansion)
         - ``"1,3-5,7"``→ ``"1,3,4,5,7"``  (mixed)
+
+        Returns:
+            The expanded comma-separated position list.
         """
         import re
 
@@ -618,7 +657,11 @@ class MTFWriter:
     def _parse_constraint_expression(
         self, expression: str
     ) -> Tuple[str, str, str]:
-        """Parse constraint expression into (operator, lhs, rhs)."""
+        """Parse constraint expression into (operator, lhs, rhs).
+
+        Returns:
+            A tuple of (operator, lhs, rhs).
+        """
         import re
 
         # Try to match patterns like "A = B" or "A == B" or "A >= B" or "A <= B"
@@ -639,7 +682,11 @@ class MTFWriter:
         computed from mass balance); reactions with non-zero stored values are F
         (they are the free parameters, matching the original model's intent).
         Drain reactions are always D.  If the zero-valued reactions do not form
-        a valid (non-singular) basis, QR with column pivoting is used as a fallback.
+        a valid (non-singular) basis, QR with column pivoting is used as a
+        fallback.
+
+        Returns:
+            A set of reaction IDs that should be Dependent.
         """
         import numpy as np
         from scipy.linalg import qr
@@ -737,6 +784,9 @@ class MTFWriter:
         Solves S[:,D]*v_D = -S[:,F]*v_F (S*v=0 with F values from simulation).
         Any near-zero fluxes at the starting point are handled by influx_si's
         --clownr option written to the .opt file.
+
+        Returns:
+            A dict mapping flux name to balanced starting value.
         """
         import numpy as np
 
@@ -820,7 +870,8 @@ class MTFWriter:
         result = _compute_d({n: stored.get(n, 0.0) for n in f_names})
 
         # If any D drain flux is ≤ 0, fall back: measured F values stay,
-        # non-measured free fluxes are set to 0 to get feasible D starting values.
+        # non-measured free fluxes are set to 0 to get feasible D
+        # starting values.
         drain_d = [n for n in d_names if n in drain_ids]
         if any(result.get(n, 0.0) <= 1e-9 for n in drain_d):
             f_fallback = {n: measured.get(n, 0.0) for n in f_names}
@@ -868,14 +919,16 @@ class MTFWriter:
                 # QR-based F/D assignment from stoichiometric null space
                 dependent_ids = self._compute_dependent_fluxes()
 
-                # Compute mass-balanced starting values (solve S[:,D]*v_D = -S[:,F]*v_F)
+                # Compute mass-balanced starting values
+                # (solve S[:,D]*v_D = -S[:,F]*v_F)
                 balanced = self._solve_balanced_starting_values(
                     dependent_ids,
                     sim.variables.flux_values,
                     drain_ids_,
                 )
 
-                # Write flux rows (F or D only — C is not valid for any flux here)
+                # Write flux rows (F or D only — C is not valid for any
+                # flux here)
                 for flux_val in sim.variables.flux_values:
                     flux_name = flux_val.flux
                     kind = "XCH" if flux_val.type == "xch" else "NET"

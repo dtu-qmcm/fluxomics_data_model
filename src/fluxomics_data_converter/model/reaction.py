@@ -3,7 +3,8 @@
 Each reaction describes the transformation of one set of metabolites
 (reactants) into another (products).  Reactions can be reversible or
 irreversible, and may carry multiple atom-mapping variants when symmetric
-substrates create ambiguous carbon transitions (see :attr:`Reaction.atom_transition_ids`).
+substrates create ambiguous carbon transitions
+(see :attr:`Reaction.atom_transition_ids`).
 
 The separator ``"___"`` (triple underscore) is a naming convention used
 throughout the library to distinguish variant reaction IDs from base IDs.

@@ -337,7 +337,8 @@ class TestFluxMLParsingVariants:
 
     @_BCG_SKIP
     def test_to_fluxml_string_variant(self):
-        """Test that variant atom transitions have different FluxML string outputs."""
+        """Test that variant atom transitions have different FluxML string
+        outputs."""
         parser = FluxMLParser()
         data_model = parser.parse_file(str(_BCG_FML))
 

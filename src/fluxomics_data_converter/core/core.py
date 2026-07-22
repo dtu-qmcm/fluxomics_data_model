@@ -66,7 +66,12 @@ class Metadata(BaseModel):
     @field_validator("date", mode="before")
     @classmethod
     def parse_date(cls, v):
-        """Parse FluxML timestamp format: YYYY-MM-DD HH:MM:SS."""
+        """Parse FluxML timestamp format: YYYY-MM-DD HH:MM:SS.
+
+        Returns:
+            A ``datetime`` object if the string matches the FluxML
+            timestamp pattern, otherwise the input value unchanged.
+        """
         if isinstance(v, str):
             # FluxML timestamp pattern: YYYY-MM-DD HH:MM:SS
             if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", v):
@@ -116,7 +121,12 @@ class MetabolicNetworkModel(BaseModel):
         self._validate_cross_references()
 
     def _validate_cross_references(self):
-        """Validate cross-references between metabolites and reactions."""
+        """Validate cross-references between metabolites and reactions.
+
+        Raises:
+            ValueError: If a reactant or product ID references an unknown
+                metabolite.
+        """
         metabolite_ids = self.metabolite_ids
 
         # Check all reactant and product IDs exist in metabolites
@@ -250,7 +260,12 @@ class LabelingExperiments(BaseModel):
     def get_tracer_for_metabolite(
         self, metabolite_id: str
     ) -> Optional[Tracers]:
-        """Get tracer specification for a metabolite."""
+        """Get tracer specification for a metabolite.
+
+        Returns:
+            The tracer specification for the metabolite, or ``None`` if
+            no tracer exists for it.
+        """
         for tracer_spec in self.tracers:
             if tracer_spec.metabolite == metabolite_id:
                 return tracer_spec
@@ -326,7 +341,13 @@ class FluxomicsData(BaseModel):
         self._validate_experiments_references()
 
     def _validate_experiments_references(self):
-        """Validate experiment references to metabolites and reactions."""
+        """Validate experiment references to metabolites and reactions.
+
+        Raises:
+            ValueError: If experiment names are not unique, or if a
+                tracer/simulation variable references an unknown
+                metabolite or reaction.
+        """
         metabolite_ids = self.metabolite_ids
         # Use computational reaction IDs for validation (includes variant IDs)
         computational_reaction_ids = self.model.computational_reaction_ids
@@ -403,7 +424,11 @@ class FluxomicsData(BaseModel):
         return frozenset(exp.name for exp in self.experiments)
 
     def get_experiments(self, name: str) -> Optional[LabelingExperiments]:
-        """Get experiments by name."""
+        """Get experiments by name.
+
+        Returns:
+            The experiment with the given name, or ``None`` if not found.
+        """
         for exp in self.experiments:
             if exp.name == name:
                 return exp
